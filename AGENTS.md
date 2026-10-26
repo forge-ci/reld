@@ -39,6 +39,18 @@ Across every platform:
   `ban_platform_cfg_outside_boundary` Dylint enforces this with no baseline; see
   [`dylints/README.md`](dylints/README.md).
 
+## Design principles (fleet directives, zackees/ci.yml#163)
+
+Agent and review guidance from zackees/ci.yml `docs/policy-rust.md` ("Design principles, narrowed"). Not enforced by ci-lint; no rule ID.
+
+1. **Search before you add.** Before adding a resolver, detector, predicate, guard or path helper, `rg` for an existing one. Reuse it, or say in the PR why it does not fit.
+2. **Conflicting implementations get a research issue, not an inline winner.** If the same concept is implemented more than once with observably different behaviour and fixing it needs a design decision, file `research: N conflicting implementations of X -- which is canonical?` listing every copy (`file:line`) and what the difference does to real input; cross-reference it and carry on with your task. Copies that behave identically are a refactor, not an issue.
+3. **Keep behaviour changes and refactors apart.** Separate commits, preferably separate PRs, never one mixed diff.
+4. **Refactor first only when you would grow a giant function.** If a fix would add more than 50 lines to a function already over 200 lines, extract first in a separate behaviour-preserving change with characterization tests written first (RED -> GREEN). Otherwise fix it where it belongs; no unrequested restructures.
+5. **Function and file size follow `RUST-018`'s ceilings.** reld does not run the ratchet yet: the workspace inherits `too_many_lines = "allow"` in `Cargo.toml`, so nothing mechanical holds this line. New functions still stay under clippy's `too_many_lines` (100) and `cognitive_complexity` (25), and an existing function over them must not grow. Never split a file with `include!` fragments to dodge a length ceiling. Before splitting a hot file, check `git branch -a --contains` for in-flight branches -- a split is a rename and conflicts destructively.
+6. **Fail fast, and delete before you abstract.** Reject invalid input at the boundary with a typed error; never fall back silently to a degraded path. Prefer deleting code to adding a layer. No new trait until there are two real implementations (a test double does not count). This is the same rule as "Never write to stderr on a successful link without `RELD_LOG_ENGINE`" applied to fallbacks: a native engine that cannot handle an input routes explicitly (see routing above), it does not silently degrade.
+7. **Existing boundaries beat generic DRY.** The `platforms` boundary above (enforced by the `ban_platform_cfg_outside_boundary` Dylint), the fixed crate set in "Crate layout" below, and documented deliberate copies win over removing duplication. Do not copy code across a crate boundary to get around it -- say the boundary hurts. An undocumented copy is a finding under 2; a documented one is not.
+
 ## Dependency approval
 
 The linker's existing dependency graph is a fixed budget. Do not add a direct, development,
