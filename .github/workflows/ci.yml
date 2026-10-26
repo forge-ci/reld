@@ -16,6 +16,11 @@ on:
       - "docs/**"
       - "LICENSE*"
       - "NOTICE"
+  # GEN-022 (forge-ci/ci.yml#405/#432): main merges through a merge queue,
+  # which validates the exact merge commit. paths-ignore does not apply to
+  # merge_group, so every queued PR runs the full workflow.
+  merge_group:
+    types: [checks_requested]
   workflow_dispatch:
 
 concurrency:
@@ -46,6 +51,28 @@ env:
   NEXTEST_VERSION: "0.9.140"
 
 jobs:
+  # GEN-022 / forge-ci/ci.yml#409: a queue ref carries the base commit
+  # (gh-readonly-queue/main/pr-<N>-<sha>), so the concurrency group above never
+  # pairs a PR's rebuilt queue run with the one main's movement replaced; this
+  # cancels the older one. No `needs:`; only the cache janitor depends on it.
+  cancel-superseded:
+    name: Cancel superseded queue runs
+    if: ${{ !cancelled() && github.event_name == 'merge_group' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      actions: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          sparse-checkout: ci
+          persist-credentials: false
+      - name: Cancel
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 -m ci.cancel_superseded
+
   # Verified-reuse decision (zackees/ci.yml GEN-021, rollout zackees/ci.yml#162), SHADOW mode:
   # on a main push it reports whether a green pull_request run on a tree-identical PR head already
   # proved every job below, in the job summary. It never sets reuse=true, nothing consumes its
@@ -899,3 +926,40 @@ jobs:
           name: reld-${{ matrix.target }}-release
           path: target/${{ matrix.target }}/release/${{ matrix.artifact }}
           if-no-files-found: error
+
+  # GEN-022 (forge-ci/ci.yml#405): every queue run and main push ends with the
+  # ci-lint cache janitor. It runs after every other job, even failed ones, so
+  # the repository stays under [cache].budget by our LRU order instead of
+  # GitHub's, which can evict a seed a required job restores. The queue
+  # serializes default-branch cache writes; the non-cancelling group keeps one
+  # sweep at a time across runs. Pinned to a ci-lint new enough to run the
+  # repo-wide budget LRU pass (forge-ci/ci.yml#407).
+  cache-janitor:
+    name: Cache janitor
+    needs: [cancel-superseded, reuse-decision, hygiene, dylint, phase1-native, phase1-cross-build, phase1-native-run, python, cross-release]
+    if: always() && github.event_name != 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    concurrency:
+      group: cache-janitor
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      actions: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          repository: zackees/ci.yml
+          ref: 953c4e13691b10c1c4f1f9c39fa259fd732c5789
+          path: .ci-lint
+          persist-credentials: false
+          sparse-checkout: ci_lint
+      - name: Evict down to the cache budget
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          PYTHONPATH: .ci-lint
+        run: python3 -m ci_lint cache janitor --repo .
