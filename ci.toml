@@ -143,7 +143,7 @@ cache  = "machine"
 
 # ── Allowlists ─────────────────────────────────────────────────────────────────
 [allow]
-workflows         = { "ci.yml" = ["pull_request", "push:main", "workflow_dispatch"], "cross-ship.yml" = ["push:main", "schedule", "workflow_dispatch"], "linker-artifacts.yml" = ["pull_request", "push:main"], "linker-modes.yml" = ["pull_request", "push:main"], "release.yml" = ["push:tags"] }
+workflows         = { "ci.yml" = ["pull_request", "push:main", "merge_group", "workflow_dispatch"], "cross-ship.yml" = ["push:main", "schedule", "workflow_dispatch"], "linker-artifacts.yml" = ["pull_request", "push:main"], "linker-modes.yml" = ["pull_request", "push:main"], "release.yml" = ["push:tags"] }
 actions           = ["actions/checkout", "actions/upload-artifact", "actions/download-artifact", "zackees/setup-soldr", "astral-sh/setup-uv", "msys2/setup-msys2"]
 # reld calls `zackees/setup-soldr` directly from workflow steps (no composite
 # wrapper action), so `only-in` stays empty and the wrapper check does not apply.
@@ -153,7 +153,9 @@ tools             = ["soldr", "cargo", "uv", "python3", "git"]
 secrets           = []
 platform-selector = "crates/reld/src/platform.rs"
 platform-code     = ["crates/reld/src/platforms/**", "crates/reld-link/src/platforms/**"]
-permissions       = { "id-token: write" = ["release"], "actions: write" = ["cache-maint"] }
+# actions: write (SEC-002): cache-maint, plus the merge queue's cancel-superseded
+# and cache-janitor jobs (GEN-022, forge-ci/ci.yml#409/#405).
+permissions       = { "id-token: write" = ["release"], "actions: write" = ["cache-maint", "cancel-superseded", "cache-janitor"] }
 
 # ── Publish ────────────────────────────────────────────────────────────────────
 # reld ships release binaries and a release site; it publishes nothing to PyPI.
