@@ -1,12 +1,12 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-10-26T16:47:49Z",
+  "generated_at": "2026-10-27T15:44:05Z",
   "reld": {
     "commit": "5ceca49c94f746f171515e5c2d65d67e345a53f2",
     "version": "Reld 5ceca49c94f746f171515e5c2d65d67e345a53f2 (compatible with GNU linkers)"
   },
   "runner": {
-    "name": "GitHub Actions 1000003539",
+    "name": "GitHub Actions 1000005020",
     "os": "Linux",
     "arch": "x86_64",
     "image": "ubuntu24 20261023.334.3",
@@ -68,7 +68,7 @@
       "stage": null,
       "first_line": null,
       "control": "not_run",
-      "seconds": 20.5
+      "seconds": 20.7
     },
     {
       "name": "fmt",
@@ -85,7 +85,7 @@
       "stage": null,
       "first_line": null,
       "control": "not_run",
-      "seconds": 27.7
+      "seconds": 27.6
     },
     {
       "name": "mimalloc",
@@ -102,7 +102,7 @@
       "stage": null,
       "first_line": null,
       "control": "not_run",
-      "seconds": 8.7
+      "seconds": 9.6
     },
     {
       "name": "ripgrep",
@@ -118,7 +118,7 @@
       "stage": null,
       "first_line": null,
       "control": "not_run",
-      "seconds": 26.9
+      "seconds": 27.1
     }
   ]
 }
