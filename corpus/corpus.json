@@ -1,12 +1,12 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-10-28T16:33:58Z",
+  "generated_at": "2026-10-29T16:46:02Z",
   "reld": {
     "commit": "e26bcd7650fb024a0a800c319cb41d4032204cf8",
     "version": "Reld e26bcd7650fb024a0a800c319cb41d4032204cf8 (compatible with GNU linkers)"
   },
   "runner": {
-    "name": "GitHub Actions 1000006862",
+    "name": "GitHub Actions 1000008517",
     "os": "Linux",
     "arch": "x86_64",
     "image": "ubuntu24 20261026.354.1",
@@ -36,7 +36,7 @@
       "stage": null,
       "first_line": null,
       "control": "not_run",
-      "seconds": 6.4
+      "seconds": 4.6
     },
     {
       "name": "zlib-static",
@@ -51,7 +51,7 @@
       "stage": null,
       "first_line": null,
       "control": "not_run",
-      "seconds": 1.6
+      "seconds": 2.0
     },
     {
       "name": "sqlite",
@@ -68,7 +68,7 @@
       "stage": null,
       "first_line": null,
       "control": "not_run",
-      "seconds": 11.9
+      "seconds": 20.6
     },
     {
       "name": "fmt",
@@ -85,7 +85,7 @@
       "stage": null,
       "first_line": null,
       "control": "not_run",
-      "seconds": 16.2
+      "seconds": 28.1
     },
     {
       "name": "mimalloc",
@@ -102,7 +102,7 @@
       "stage": null,
       "first_line": null,
       "control": "not_run",
-      "seconds": 7.6
+      "seconds": 10.3
     },
     {
       "name": "ripgrep",
@@ -118,7 +118,7 @@
       "stage": null,
       "first_line": null,
       "control": "not_run",
-      "seconds": 18.2
+      "seconds": 28.4
     }
   ]
 }
