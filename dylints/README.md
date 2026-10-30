@@ -41,10 +41,10 @@ Install the lint's nightly (from `ban_platform_cfg_outside_boundary/rust-toolcha
 Dylint tools:
 
 ```sh
-rustup toolchain install nightly-2026-05-28 --profile minimal \
+rustup toolchain install nightly-2026-08-15 --profile minimal \
   --component rustc-dev --component llvm-tools-preview --component rust-src --component rustfmt
-cargo install cargo-dylint --version 6.0.3 --locked
-cargo install dylint-link --version 6.0.3 --locked
+cargo install cargo-dylint --version 6.2.0 --locked
+cargo install dylint-link --version 6.2.0 --locked
 ```
 
 Test the lint (unit tests and `ui/` fixtures):

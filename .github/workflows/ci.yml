@@ -154,7 +154,7 @@ jobs:
     timeout-minutes: 45
     env:
       DYLINT_DIR: dylints/ban_platform_cfg_outside_boundary
-      DYLINT_VERSION: 6.0.3
+      DYLINT_VERSION: 6.2.0
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
