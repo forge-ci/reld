@@ -1,12 +1,12 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-10-30T16:33:51Z",
+  "generated_at": "2026-10-31T15:41:09Z",
   "reld": {
-    "commit": "e26bcd7650fb024a0a800c319cb41d4032204cf8",
-    "version": "Reld e26bcd7650fb024a0a800c319cb41d4032204cf8 (compatible with GNU linkers)"
+    "commit": "6535d318265718f98b2c196b380c80241d7c653a",
+    "version": "Reld 6535d318265718f98b2c196b380c80241d7c653a (compatible with GNU linkers)"
   },
   "runner": {
-    "name": "GitHub Actions 1000011254",
+    "name": "GitHub Actions 1000013097",
     "os": "Linux",
     "arch": "x86_64",
     "image": "ubuntu24 20261026.354.1",
@@ -36,7 +36,7 @@
       "stage": null,
       "first_line": null,
       "control": "not_run",
-      "seconds": 4.9
+      "seconds": 4.0
     },
     {
       "name": "zlib-static",
@@ -51,7 +51,7 @@
       "stage": null,
       "first_line": null,
       "control": "not_run",
-      "seconds": 2.0
+      "seconds": 1.6
     },
     {
       "name": "sqlite",
@@ -68,7 +68,7 @@
       "stage": null,
       "first_line": null,
       "control": "not_run",
-      "seconds": 16.3
+      "seconds": 15.1
     },
     {
       "name": "fmt",
@@ -85,7 +85,7 @@
       "stage": null,
       "first_line": null,
       "control": "not_run",
-      "seconds": 22.7
+      "seconds": 19.4
     },
     {
       "name": "mimalloc",
@@ -102,7 +102,7 @@
       "stage": null,
       "first_line": null,
       "control": "not_run",
-      "seconds": 8.7
+      "seconds": 7.7
     },
     {
       "name": "ripgrep",
@@ -118,7 +118,7 @@
       "stage": null,
       "first_line": null,
       "control": "not_run",
-      "seconds": 22.3
+      "seconds": 21.2
     }
   ]
 }
