@@ -154,49 +154,43 @@ jobs:
     timeout-minutes: 45
     env:
       DYLINT_DIR: dylints/ban_platform_cfg_outside_boundary
-      DYLINT_VERSION: 6.0.3
+      DYLINT_VERSION: 6.2.0
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
-      - uses: dtolnay/rust-toolchain@4716b85f2fac3e324e64fa2810f6b5c3905760a5 # 1.97.1
-
-      - name: Install Dylint nightly toolchain
-        shell: bash
-        run: |
-          set -euxo pipefail
-          channel="$(sed -n 's/^channel = "\(.*\)"$/\1/p' "${DYLINT_DIR}/rust-toolchain.toml")"
-          test -n "${channel}"
-          rustup toolchain install "${channel}" \
-            --profile minimal \
-            --component rustc-dev \
-            --component llvm-tools-preview \
-            --component rust-src \
-            --component rustfmt
-
-      - name: Install cargo-dylint and dylint-link
-        shell: bash
-        run: |
-          set -euxo pipefail
-          cargo install cargo-dylint --version "${DYLINT_VERSION}" --locked
-          cargo install dylint-link --version "${DYLINT_VERSION}" --locked
+      # setup-soldr installs Soldr's pinned cargo-dylint/dylint-link and the
+      # pre-deployed driver for the lint library's nightly. A bare
+      # `cargo install cargo-dylint` builds the 6.2.0 driver from source,
+      # which fails upstream (E0554 in dylint_driver's build script).
+      - name: Set up Soldr with managed Dylint
+        uses: zackees/setup-soldr@v0
+        with:
+          cache: true
+          prebuild-deps: none
+          dylint: true
+          dylint-toolchain: nightly-2026-08-15
+          cargo-dylint-version: ${{ env.DYLINT_VERSION }}
+          dylint-link-version: ${{ env.DYLINT_VERSION }}
 
       - name: Check lint formatting
         shell: bash
         working-directory: ${{ env.DYLINT_DIR }}
-        run: cargo fmt --check
+        run: soldr cargo fmt --check
 
       - name: Test lint (unit + UI)
         shell: bash
         working-directory: ${{ env.DYLINT_DIR }}
-        run: cargo test
+        # rustup run puts the nightly's rustc_driver libs on the loader path
+        # for the UI test binary; a plain front-door test exits 127.
+        run: soldr rustup run nightly-2026-08-15 cargo test
 
       - name: Lint workspace (default features)
         shell: bash
-        run: cargo dylint --path "${DYLINT_DIR}" --workspace -- --all-targets
+        run: soldr cargo dylint --path "${DYLINT_DIR}" --workspace -- --all-targets
 
       - name: Lint workspace (no default features)
         shell: bash
-        run: cargo dylint --path "${DYLINT_DIR}" --workspace -- --all-targets --no-default-features
+        run: soldr cargo dylint --path "${DYLINT_DIR}" --workspace -- --all-targets --no-default-features
 
   phase1-native:
     name: Phase 1 / ${{ matrix.name }}
