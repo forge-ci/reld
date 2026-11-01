@@ -41,7 +41,7 @@ jobs:
             runner: windows-2022
             install_llvm: true
           - platform: macos
-            runner: macos-14
+            runner: macos-15
             install_llvm: false
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
