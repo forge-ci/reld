@@ -42,7 +42,9 @@ env:
   WILD_VERSION: 0.9.0
   MSYS2_BINUTILS_VERSION: 2.46.1-2
   MSVC_LINK_VERSION: "14.44"
-  APPLE_LD_VERSION: "1053.12"
+  # Apple ld from the Xcode selected in phase1-native-run (macos-15 image).
+  APPLE_XCODE_APP: /Applications/Xcode_16.4.app
+  APPLE_LD_VERSION: "1167.5"
   LIBTINFO5_VERSION: "6.3-2ubuntu0.3"
   # One pinned cargo-nextest for both the archive producer (phase1-cross-build)
   # and the replaying runner (phase1-native-run), so they agree on the archive
@@ -682,6 +684,7 @@ jobs:
         if: matrix.kind == 'macos-arm64'
         shell: bash
         run: |
+          sudo xcode-select -s "${APPLE_XCODE_APP}"
           brew install llvm@18
           echo "$(brew --prefix llvm@18)/bin" >> "${GITHUB_PATH}"
 
