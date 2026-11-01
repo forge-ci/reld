@@ -185,7 +185,7 @@ def test_three_platform_artifact_workflow_runs_consumer_acceptance() -> None:
     workflow = WORKFLOW.read_text(encoding="utf-8")
 
     assert "runner: ubuntu-24.04" in workflow
-    assert "runner: macos-14" in workflow
+    assert "runner: macos-15" in workflow
     assert "runner: windows-2022" in workflow
     assert "cache: false" in workflow
     assert "prebuild-deps: none" in workflow

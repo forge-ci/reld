@@ -188,7 +188,7 @@ route to the `ld64.lld` engine on any host. On a Linux host the `RELD_LOG_ENGINE
 bridge (`RELD_BRIDGE_LINKER`, then `rust-lld -flavor darwin` from the active toolchain, then
 `ld64.lld` on `PATH`). A Linux host can therefore link Mach-O with
 `clang --target=arm64-apple-macos11 --ld-path=reld` (CI proof:
-`.github/workflows/cross-ship.yml` links a Mach-O hello on ubuntu and runs it on the macos-14
+`.github/workflows/cross-ship.yml` links a Mach-O hello on ubuntu and runs it on the macos-15
 host-run leg).
 
 The darwin-cc rule, decided on [#123](https://github.com/zackees/reld/issues/123) and recorded on

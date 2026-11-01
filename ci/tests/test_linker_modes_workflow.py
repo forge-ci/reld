@@ -7,7 +7,7 @@ def test_workflow_covers_all_native_hosts() -> None:
     text = WORKFLOW.read_text(encoding="utf-8")
     assert "runner: ubuntu-24.04" in text
     assert "runner: windows-2022" in text
-    assert "runner: macos-14" in text
+    assert "runner: macos-15" in text
     for platform in ("linux", "windows", "macos"):
         assert f"platform: {platform}" in text
 
