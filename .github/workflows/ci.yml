@@ -931,6 +931,29 @@ jobs:
           path: target/${{ matrix.target }}/release/${{ matrix.artifact }}
           if-no-files-found: error
 
+  # Single required merge gate (pull_request + merge_group). It decides from the
+  # run attempt's full job list, not needs.*.result, so every job in this
+  # workflow gates the queue; maintenance jobs are exempted by name in
+  # ci/ci_summary.py. `needs` only orders it after the jobs it inspects.
+  ci-summary:
+    name: CI summary
+    needs: [reuse-decision, hygiene, dylint, phase1-native, phase1-cross-build, phase1-native-run, python, cross-release]
+    if: ${{ always() }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          sparse-checkout: ci
+          persist-credentials: false
+      - name: Gate on every job in this run attempt
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 -m ci.ci_summary
+
   # GEN-022 (forge-ci/ci.yml#405): every queue run and main push ends with the
   # ci-lint cache janitor. It runs after every other job, even failed ones, so
   # the repository stays under [cache].budget by our LRU order instead of
