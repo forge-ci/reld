@@ -570,7 +570,7 @@ jobs:
           # cross-ship.yml. cargo-nextest is installed at NEXTEST_VERSION in the
           # next step so the archive this job produces is replayable by the
           # same pinned cargo-nextest that phase1-native-run installs.
-          version: 0.9.18
+          version: 0.9.45
           cross-targets: ${{ matrix.target }}
           linker: fast
           cache: true
@@ -897,7 +897,7 @@ jobs:
           # 0.9.18 ships the win-gnu prepare fix (soldr#3259): `soldr prepare
           # --target x86_64-pc-windows-gnu` captures the mingw-w64-cross
           # toolchain, so `cross-targets` works for win-gnu.
-          version: 0.9.18
+          version: 0.9.45
           cross-targets: ${{ matrix.target }}
           # win-gnu links via the mingw gcc's own ld: soldr's default `fast`
           # injects `-fuse-ld=lld`, which the cross gcc can't resolve.
