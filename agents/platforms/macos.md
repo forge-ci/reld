@@ -14,6 +14,8 @@ and the root [`AGENTS.md`](../../AGENTS.md) first.
   directly with the same effective arguments, inputs, environment, and deterministic options.
 - Pin the LLVM/Rust toolchain that supplies `ld64.lld`. Apple's linker is a compatibility and
   performance reference, not a byte-identity reference, because its Mach-O layout policy differs.
+- Phase 1 CI runs on `macos-15` (macos-14 was retired 2026-11-02) with Xcode 16.4 selected
+  explicitly, pinning Apple `ld` at `ld-1167.5` (`APPLE_XCODE_APP` / `APPLE_LD_VERSION` in `ci.yml`).
 
 ## Required evidence
 
