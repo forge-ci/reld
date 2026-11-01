@@ -162,10 +162,16 @@ jobs:
       # pre-deployed driver for the lint library's nightly. A bare
       # `cargo install cargo-dylint` builds the 6.2.0 driver from source,
       # which fails upstream (E0554 in dylint_driver's build script).
+      # Pinned (was floating @v0): last SHA observed green on main, run
+      # 41178866016. The cargo-registry layer is off because its legacy-v1
+      # archive saved by that run (key ...-962e24c055559d86, 15850 files)
+      # restores 15849 files and drops dylint_internal-6.2.0/template.tar,
+      # breaking every later `cargo test` here; cargo fetches sources fresh.
       - name: Set up Soldr with managed Dylint
-        uses: zackees/setup-soldr@v0
+        uses: zackees/setup-soldr@bf522834325fdf22eb7091f186ac33034ceb6e66 # v0 @ 2026-10-31
         with:
           cache: true
+          cargo-registry-cache: "false"
           prebuild-deps: none
           dylint: true
           dylint-toolchain: nightly-2026-08-15
@@ -631,7 +637,8 @@ jobs:
             artifact: phase1-tests-windows-msvc
           - name: macos arm64
             kind: macos-arm64
-            os: macos-14
+            # macos-14 is retired by GitHub on 2026-11-02 (brownouts cancel it).
+            os: macos-15
             target: aarch64-apple-darwin
             artifact: phase1-tests-macos-arm64
     steps:

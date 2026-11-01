@@ -300,6 +300,8 @@ def test_phase1_msvc_and_macos_compile_on_linux_and_only_replay_on_target():
     assert "cargo nextest run --archive-file" in native_run
     assert "--workspace-remap" in native_run
     assert "ci.windows_ci native-tests" in native_run
+    assert "os: macos-15" in native_run, "macos-14 is retired 2026-11-02; phase1-native-run must not use it"
+    assert "os: macos-14" not in native_run
     assert "cargo build --workspace" not in native_run
     assert "$CARGO_COMMAND build --workspace" not in native_run
     assert "$CARGO_COMMAND test" not in native_run
@@ -360,3 +362,11 @@ def test_phase1_summary_only_relaxes_missing_log_validation_after_failure():
     assert "PHASE1_UPSTREAM_FAILED=true" in text
     assert "PHASE1_UPSTREAM_FAILED: ${{ failure() }}" not in text
     assert text.count("--upstream-failed") == 5
+
+
+def test_dylint_job_pins_setup_soldr_and_skips_the_registry_layer():
+    dylint = _job_blocks(WORKFLOW.read_text())["dylint"]
+    assert "zackees/setup-soldr@v0" not in dylint, "dylint must pin setup-soldr to a SHA, not float on @v0"
+    assert "zackees/setup-soldr@bf522834325fdf22eb7091f186ac33034ceb6e66" in dylint
+    # The legacy-v1 cargo-registry archive drops dylint_internal's template.tar.
+    assert 'cargo-registry-cache: "false"' in dylint
