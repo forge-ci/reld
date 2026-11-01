@@ -44,7 +44,7 @@ jobs:
             linker: mold
           - os: windows-2022
             linker: lld
-          - os: macos-14
+          - os: macos-15
             linker: ""
     steps:
       - uses: actions/checkout@v4

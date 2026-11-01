@@ -19,7 +19,7 @@ name: Cross ship (build off-platform, run on-platform)
 # The macos-arm64 leg likewise proves that reld itself, built for the Linux
 # host, links a Mach-O hello-world on Linux
 # (`clang --target=arm64-apple-macos11 --ld-path=reld`, reld#192, the #123
-# Phase 3 exit), and that the resulting exe runs on the macos-14 host-run
+# Phase 3 exit), and that the resulting exe runs on the macos-15 host-run
 # runner.
 #
 # NOTE: validated — this workflow ran green on main across all six jobs
@@ -322,7 +322,7 @@ jobs:
             artifact: reld-windows-x86_64-msvc
             executable: reld.exe
           - name: macos-arm64
-            runner: macos-14
+            runner: macos-15
             artifact: reld-macos-arm64
             executable: reld
           - name: windows-gnu

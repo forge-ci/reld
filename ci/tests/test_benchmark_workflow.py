@@ -11,7 +11,7 @@ def test_benchmark_workflow_publishes_one_directory_per_target():
     assert "matrix:" in text
     assert "ubuntu-24.04" in text
     assert "windows-2022" in text
-    assert "macos-14" in text
+    assert "macos-15" in text
     assert "x86_64-linux" in text
     assert "x86_64-pc-windows-msvc" in text
     assert "aarch64-apple-darwin" in text

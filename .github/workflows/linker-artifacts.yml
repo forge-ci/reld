@@ -44,7 +44,7 @@ jobs:
             binary: reld
             executable: reld
           - name: macos
-            runner: macos-14
+            runner: macos-15
             target: aarch64-apple-darwin
             artifact: reld-link-macos-arm64
             binary: reld
@@ -182,7 +182,7 @@ jobs:
             artifact: reld-link-linux-x86_64
             executable: reld
           - name: macos
-            runner: macos-14
+            runner: macos-15
             artifact: reld-link-macos-arm64
             executable: reld
           - name: windows

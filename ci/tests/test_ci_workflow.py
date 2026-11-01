@@ -3,7 +3,7 @@ import re
 from pathlib import Path
 from types import SimpleNamespace
 
-from ci import release_manifest, windows_ci
+from ci import ci_summary, release_manifest, windows_ci
 
 
 WORKFLOW = Path(__file__).parents[2] / ".github" / "workflows" / "ci.yml"
@@ -370,3 +370,28 @@ def test_dylint_job_pins_setup_soldr_and_skips_the_registry_layer():
     assert "zackees/setup-soldr@bf522834325fdf22eb7091f186ac33034ceb6e66" in dylint
     # The legacy-v1 cargo-registry archive drops dylint_internal's template.tar.
     assert 'cargo-registry-cache: "false"' in dylint
+
+
+def test_ci_summary_blocks_on_every_unsuccessful_conclusion_except_maintenance_jobs():
+    jobs = [{"name": f"job {c}", "conclusion": c} for c in sorted(ci_summary.BLOCKING)]
+    jobs += [
+        {"name": "Python", "conclusion": "success"},
+        {"name": "Phase 1 / macos arm64", "conclusion": "skipped"},
+        {"name": "CI summary", "conclusion": None},
+        {"name": "Cancel superseded queue runs", "conclusion": "failure"},
+        {"name": "Cache janitor", "conclusion": "cancelled"},
+    ]
+    blocked = ci_summary.blockers(jobs)
+    assert blocked == sorted((f"job {c}", c) for c in ci_summary.BLOCKING), blocked
+
+
+def test_ci_summary_gate_runs_always_on_pr_and_queue_and_exempts_only_real_jobs():
+    text = WORKFLOW.read_text()
+    block = _job_blocks(text)["ci-summary"]
+    assert "name: CI summary" in block
+    assert "if: ${{ always() }}" in block
+    assert "actions: read" in block and "contents: read" in block
+    assert "run: python3 -m ci.ci_summary" in block
+    names = set(re.findall(r"^    name: (.+)$", text, re.MULTILINE))
+    missing = ci_summary.EXEMPT - names
+    assert not missing, f"exempted job names not in ci.yml: {missing}"

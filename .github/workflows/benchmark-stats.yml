@@ -134,7 +134,7 @@ jobs:
     runs-on: >-
       ${{ matrix.target == 'x86_64-linux' && 'ubuntu-24.04'
           || matrix.target == 'x86_64-pc-windows-msvc' && 'windows-2022'
-          || 'macos-14' }}
+          || 'macos-15' }}
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
