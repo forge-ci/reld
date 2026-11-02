@@ -340,6 +340,8 @@ docker run --rm -v "$PWD:/src" -w /src reld-ci \
 
 See [UPSTREAM.md](UPSTREAM.md) for the tracked source delta.
 
+PRs to `main` are put in the merge queue automatically once eligible; see [docs/auto-queue.md](docs/auto-queue.md).
+
 ## License
 
 The code derived from wild is dual-licensed MIT OR Apache-2.0; see [LICENSE-MIT](LICENSE-MIT),

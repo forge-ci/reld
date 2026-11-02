@@ -1,0 +1,50 @@
+name: Auto queue
+
+# Enqueue eligible PRs into the `main` merge queue (ruleset "main merge queue",
+# merge_method MERGE, required check `CI summary`). Rules: docs/auto-queue.md.
+on:
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+  schedule:
+    - cron: "*/30 * * * *"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Log decisions only; do not enqueue"
+        type: boolean
+        default: true
+      pr:
+        description: "Optional single PR number (blank = sweep all open PRs to main)"
+        type: string
+        default: ""
+
+permissions:
+  contents: read
+  pull-requests: write
+  actions: read
+
+concurrency:
+  group: auto-queue
+  cancel-in-progress: false
+
+jobs:
+  auto-queue:
+    # Skip CI runs that were not for a PR (main pushes, merge_group runs).
+    if: >-
+      github.event_name != 'workflow_run' ||
+      github.event.workflow_run.event == 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: .github/scripts
+      - name: Enqueue eligible PRs
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run && 'true' || 'false' }}
+          PR: ${{ github.event_name == 'workflow_dispatch' && inputs.pr || (github.event_name == 'workflow_run' && github.event.workflow_run.pull_requests[0].number) || '' }}
+          AUTO_QUEUE_ACTORS: ${{ vars.AUTO_QUEUE_ACTORS }}
+        run: .github/scripts/auto-queue.sh
