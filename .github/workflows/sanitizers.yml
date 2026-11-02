@@ -5,11 +5,14 @@ name: Sanitizers
 # These jobs cover the reld-owned workload generator. The inherited linker has its full
 # Linux-only acceptance suite in ci.yml's development container.
 
+# Cost deferral: not on pull_request. The PR/merge queue is Linux-only (`CI summary`);
+# this lane runs on push to main, nightly/weekly schedule, and workflow_dispatch.
 on:
   workflow_dispatch:
   schedule:
     - cron: "41 6 * * *"
-  pull_request:
+  push:
+    branches: [main]
     paths:
       - "crates/reld-testkit/**"
       - ".github/workflows/sanitizers.yml"

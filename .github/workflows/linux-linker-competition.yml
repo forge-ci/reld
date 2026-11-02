@@ -2,8 +2,11 @@ name: Linux linker competition
 
 # Dedicated same-run Linux ELF evidence. This workflow neither publishes history nor redefines
 # the cross-platform trend chart: its report is the only source for competitive wall/RSS claims.
+# Cost deferral: not on pull_request. The PR/merge queue is Linux-only (`CI summary`);
+# this lane runs on push to main, nightly/weekly schedule, and workflow_dispatch.
 on:
-  pull_request:
+  push:
+    branches: [main]
     paths-ignore:
       - "**.md"
       - "agents/**"
@@ -26,11 +29,9 @@ permissions:
 
 jobs:
   replay-linux:
-    # `pull_request.branches` filters the target branch, not the PR head. Keep evidence work
-    # restricted to explicit Linux performance branches while allowing a deliberate dispatch.
-    if: >-
-      github.event_name == 'workflow_dispatch' ||
-      startsWith(github.head_ref, 'perf/linux/')
+    # Every push to main is measured against its own parent (`github.event.before`); a
+    # dispatch measures against an explicit baseline. Never runs on pull_request.
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-24.04
     timeout-minutes: 180
     env:
@@ -70,12 +71,12 @@ jobs:
         shell: bash
         env:
           INPUT_BASELINE_SHA: ${{ inputs.baseline_sha }}
-          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PUSH_BEFORE_SHA: ${{ github.event.before }}
         run: |
           set -euo pipefail
-          if [[ "$GITHUB_EVENT_NAME" == "pull_request" ]]; then
-            BASELINE_SHA="$PR_BASE_SHA"
-            test "$BASELINE_SHA" = "$PR_BASE_SHA"
+          if [[ "$GITHUB_EVENT_NAME" == "push" ]]; then
+            BASELINE_SHA="$PUSH_BEFORE_SHA"
+            test "$BASELINE_SHA" = "$PUSH_BEFORE_SHA"
           else
             BASELINE_SHA="$INPUT_BASELINE_SHA"
           fi

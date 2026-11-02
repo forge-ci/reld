@@ -1,13 +1,8 @@
 name: Linker artifacts
 
+# Cost deferral: not on pull_request. The PR/merge queue is Linux-only (`CI summary`);
+# this lane runs on push to main, nightly/weekly schedule, and workflow_dispatch.
 on:
-  pull_request:
-    paths-ignore:
-      - "**.md"
-      - "agents/**"
-      - "docs/**"
-      - "LICENSE*"
-      - "NOTICE"
   push:
     branches: [main]
     paths-ignore:

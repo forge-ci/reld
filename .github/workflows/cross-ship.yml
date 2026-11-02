@@ -28,6 +28,8 @@ name: Cross ship (build off-platform, run on-platform)
 # `ci.yml`'s cross-release and native reld-bench build steps onto it is a
 # separate, tracked step. See reld#59.
 
+# Cost deferral: not on pull_request. The PR/merge queue is Linux-only (`CI summary`);
+# this lane runs on push to main, nightly/weekly schedule, and workflow_dispatch.
 on:
   workflow_dispatch:
   schedule:
@@ -35,14 +37,6 @@ on:
     - cron: "37 6 * * 1"
   push:
     branches: [main]
-    paths:
-      - "crates/**"
-      - "Cargo.toml"
-      - "Cargo.lock"
-      - "ci/cross_ship_metrics.py"
-      - "ci/tests/test_cross_ship_metrics.py"
-      - ".github/workflows/cross-ship.yml"
-  pull_request:
     paths:
       - "crates/**"
       - "Cargo.toml"
