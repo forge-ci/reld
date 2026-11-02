@@ -1,9 +1,12 @@
 import json
 import re
+import struct
 from pathlib import Path
 from types import SimpleNamespace
 
-from ci import ci_summary, release_manifest, windows_ci
+import pytest
+
+from ci import ci_summary, release_manifest, sign_windows_release, windows_ci
 
 
 WORKFLOW = Path(__file__).parents[2] / ".github" / "workflows" / "ci.yml"
@@ -395,3 +398,94 @@ def test_ci_summary_gate_runs_always_on_pr_and_queue_and_exempts_only_real_jobs(
     names = set(re.findall(r"^    name: (.+)$", text, re.MULTILINE))
     missing = ci_summary.EXEMPT - names
     assert not missing, f"exempted job names not in ci.yml: {missing}"
+
+
+SIGNING_PUBLISHER = "Zachary Vorhies"
+SIGNED_PAYLOAD = b"\x30\x82" + SIGNING_PUBLISHER.encode() + sign_windows_release.RFC3161_TIMESTAMP_OID
+
+
+def _pe(cert: bytes | None = None, *, pe32_plus: bool = True) -> bytes:
+    """A minimal PE whose security directory points at a WIN_CERTIFICATE over ``cert``."""
+    pe_offset = 0x40
+    image = bytearray(0x200)
+    image[0:2] = b"MZ"
+    struct.pack_into("<I", image, 0x3C, pe_offset)
+    image[pe_offset : pe_offset + 4] = b"PE\0\0"
+    optional = pe_offset + 24
+    struct.pack_into("<H", image, optional, 0x20B if pe32_plus else 0x10B)
+    if cert is not None:
+        blob = struct.pack("<IHH", 8 + len(cert), 0x0200, 0x0002) + cert
+        directories = optional + (112 if pe32_plus else 96)
+        struct.pack_into("<II", image, directories + 4 * 8, len(image), len(blob))
+        image += blob
+    return bytes(image)
+
+
+@pytest.mark.parametrize(
+    ("image", "problem"),
+    [
+        (_pe(), "no Authenticode signature"),
+        (_pe(b"CN=Someone Else" + sign_windows_release.RFC3161_TIMESTAMP_OID), "publisher"),
+        (_pe(SIGNING_PUBLISHER.encode()), "timestamp"),
+        (_pe(SIGNED_PAYLOAD), None),
+        (_pe(SIGNED_PAYLOAD, pe32_plus=False), None),
+    ],
+)
+def test_authenticode_check_requires_a_timestamped_signature_by_the_publisher(image, problem):
+    found = sign_windows_release.signature_problem(image, SIGNING_PUBLISHER)
+    if problem is None:
+        assert found is None
+    else:
+        assert found is not None and problem in found
+
+
+def test_signing_verify_fails_on_any_unsigned_shipped_pe(tmp_path: Path):
+    staging, llvm = tmp_path / "staging", tmp_path / "llvm-ld-coff"
+    staging.mkdir()
+    llvm.mkdir()
+    (staging / "reld.exe").write_bytes(_pe(SIGNED_PAYLOAD))
+    (staging / "reld-link.exe").write_bytes(_pe(SIGNED_PAYLOAD))
+    (llvm / "llvm_ld.dll").write_bytes(_pe())
+    (llvm / "LICENSE.TXT").write_text("not a PE")
+    with pytest.raises(sign_windows_release.SigningError, match="llvm_ld.dll"):
+        sign_windows_release.verify_dirs([staging, llvm], SIGNING_PUBLISHER)
+    empty = tmp_path / "empty"
+    empty.mkdir()
+    with pytest.raises(sign_windows_release.SigningError, match="no Windows PE"):
+        sign_windows_release.verify_dirs([staging, empty], SIGNING_PUBLISHER)
+
+
+def test_jsign_command_pins_artifact_signing_and_keeps_the_token_off_argv():
+    config = sign_windows_release.SigningConfig(
+        sign_windows_release.endpoint_host("https://eus.codesigning.azure.net/"), "acct", "prof", SIGNING_PUBLISHER
+    )
+    command = sign_windows_release.jsign_command(Path("jsign.jar"), config, [Path("reld.exe")])
+    flags = {flag: command[command.index(flag) + 1] for flag in ("--storetype", "--keystore", "--alias", "--storepass", "--alg", "--tsaurl", "--tsmode")}
+    assert flags == {
+        "--storetype": "TRUSTEDSIGNING",
+        "--keystore": "eus.codesigning.azure.net",
+        "--alias": "acct/prof",
+        "--storepass": f"env:{sign_windows_release.TOKEN_ENV}",
+        "--alg": "SHA-256",
+        "--tsaurl": "http://timestamp.acs.microsoft.com",
+        "--tsmode": "RFC3161",
+    }
+    assert sign_windows_release.publisher_common_name("CN=Zachary Vorhies, O=Zachary Vorhies, C=US") == SIGNING_PUBLISHER
+    with pytest.raises(sign_windows_release.SigningError):
+        sign_windows_release.endpoint_host("https://example.com/")
+
+
+def test_release_signs_windows_pes_before_packaging_and_smoke_requires_valid():
+    jobs = _job_blocks((REPO_ROOT / ".github" / "workflows" / "release.yml").read_text())
+    cross = jobs["build-cross"]
+    assert "id-token: write" in cross and "contents: read" in cross
+    order = [
+        cross.index("ci/fetch_llvm_ld.py"),
+        cross.index("azure/login@a457da9ea143d694b1b9c7c869ebb04ebe844ef5"),
+        cross.index("sign_windows_release.py sign --dir staging --dir llvm-ld-coff"),
+        cross.index("ci/package_release.py"),
+    ]
+    assert order == sorted(order), "Windows PEs must be signed after the llvm-ld lock check and before packaging"
+    assert "Get-AuthenticodeSignature" in jobs["smoke-windows"]
+    assert "-ne 'Valid'" in jobs["smoke-windows"]
+    assert 'if [ "$EVENT_NAME" = "pull_request" ]; then\n            echo "sign=false"' in jobs["preflight"]
