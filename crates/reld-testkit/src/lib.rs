@@ -263,10 +263,15 @@ fn render_unit(spec: &WorkloadSpec, unit: usize, rng: &mut ChaCha8Rng) -> String
             s.push_str("__attribute__((weak)) ");
         }
         s.push_str(&format!("int unit_{unit:04}_f{sym:04}(int x) {{\n"));
+        // `x` is the recursion depth and must only ever decrease: the COMDAT mix goes
+        // into a separate value so the guard below always terminates. Mixing into `x`
+        // itself (`x ^ 3` maps 1 -> 2) turned any cross-unit cycle into unbounded
+        // recursion and a stack-overflow crash under every linker.
+        s.push_str("    int y = x;\n");
 
         if spec.comdat_fns > 0 {
             let which = rng.gen_range(0..spec.comdat_fns);
-            s.push_str(&format!("    x = reld_inline_{which}(x);\n"));
+            s.push_str(&format!("    y = reld_inline_{which}(x);\n"));
         }
         if spec.units > 1 && rng.gen_bool(spec.ref_density.clamp(0.0, 1.0)) {
             let mut other = rng.gen_range(0..spec.units);
@@ -276,10 +281,10 @@ fn render_unit(spec: &WorkloadSpec, unit: usize, rng: &mut ChaCha8Rng) -> String
             // Guard the recursion so the generated program terminates regardless of how
             // densely the call graph is wired.
             s.push_str(&format!(
-                "    if (x > 0) x = unit_{other:04}_entry(x - 1);\n"
+                "    if (x > 0) y += unit_{other:04}_entry(x - 1);\n"
             ));
         }
-        s.push_str("    return x;\n}\n\n");
+        s.push_str("    return y;\n}\n\n");
     }
 
     // Each unit's entry returns 0, so the program's total is deterministic and independent
@@ -416,6 +421,32 @@ mod tests {
         assert!(!CompilerTarget::Apple.is_windows());
         assert!(!CompilerTarget::Linux.is_windows());
         assert!(!CompilerTarget::Other.is_windows());
+    }
+
+    #[test]
+    // Generates 11 full workloads through the filesystem: minutes natively interpreted,
+    // and it pushed the Miri job past its 30-minute timeout. Pure codegen, no unsafe.
+    #[cfg_attr(miri, ignore)]
+    fn recursion_depth_is_never_reassigned() {
+        // Seeds 263..432 overflowed the stack on every linker (Stress nightly, Oct 2026)
+        // because the COMDAT mix was written back into the recursion depth `x`.
+        for seed in [263u64, 290, 298, 320, 332, 334, 419, 432, 0, 1, 2] {
+            let spec = WorkloadSpec::random(seed);
+            let dir = tmpdir(&format!("depth-{seed}"));
+            let w = generate(&spec, &dir).unwrap();
+            for src in &w.sources {
+                let text = fs::read_to_string(src).unwrap();
+                for (n, line) in text.lines().enumerate() {
+                    let t = line.trim_start();
+                    assert!(
+                        !(t.starts_with("x =") || t.contains(") x =")),
+                        "seed {seed}: {}:{} reassigns recursion depth `x`: {line}",
+                        src.display(),
+                        n + 1
+                    );
+                }
+            }
+        }
     }
 
     #[test]

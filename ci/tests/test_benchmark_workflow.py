@@ -74,6 +74,9 @@ def test_benchmark_workflow_gates_expected_linker_coverage():
     assert "--print link-args" not in text  # Python owns capture/replay, not shell YAML.
     assert "will report n/a" not in text
     assert "cargo install --locked wild-linker ||" not in text
+    # Reference linkers are pinned (CLAUDE.md); an unpinned install broke on 0.11.0's MSRV.
+    assert "cargo install --locked wild-linker --version " in text
+    assert "cargo install --locked wild-linker\n" not in text
     assert "ilammy/msvc-dev-cmd@" in text
 
 
