@@ -2,6 +2,9 @@ name: Linker modes
 
 # Cost deferral: not on pull_request. The PR/merge queue is Linux-only (`CI summary`);
 # this lane runs on push to main, nightly/weekly schedule, and workflow_dispatch.
+# No hosted macOS cell: a starved macos-15 queue cancelled it unrun (run
+# 41520908436). Mach-O routing is host-independent (crates/reld-core/src/bridge.rs)
+# and native Mach-O execution stays in CI's `Phase 1 / macos arm64`.
 on:
   push:
     branches: [main]
@@ -35,9 +38,6 @@ jobs:
           - platform: windows
             runner: windows-2022
             install_llvm: true
-          - platform: macos
-            runner: macos-15
-            install_llvm: false
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
@@ -50,12 +50,6 @@ jobs:
         uses: KyleMayes/install-llvm-action@ebc0426251bc40c7cd31162802432c68818ab8f0 # v2
         with:
           version: 18.1.8
-      - name: Install upstream clang for macOS LTO
-        if: matrix.platform == 'macos'
-        shell: bash
-        run: |
-          brew install llvm@18
-          echo "$(brew --prefix llvm@18)/bin" >> "${GITHUB_PATH}"
       - name: Exercise every linker mode
         run: >-
           uv run --no-project python ci/linker_modes.py
