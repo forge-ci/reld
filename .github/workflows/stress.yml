@@ -7,6 +7,8 @@ name: Stress
 # produces a binary that links cleanly and then behaves wrong; a crash-only test never
 # sees it.
 
+# Cost deferral: not on pull_request. The PR/merge queue is Linux-only (`CI summary`);
+# this lane runs on push to main, nightly/weekly schedule, and workflow_dispatch.
 on:
   workflow_dispatch:
     inputs:
@@ -17,7 +19,8 @@ on:
   schedule:
     # Nightly, offset off the hour to avoid the Actions rush.
     - cron: "23 7 * * *"
-  pull_request:
+  push:
+    branches: [main]
     paths:
       - "crates/reld-testkit/**"
       - ".github/workflows/stress.yml"
@@ -69,7 +72,7 @@ jobs:
       - name: Run stress
         shell: bash
         env:
-          SEEDS: ${{ github.event.inputs.seeds || (github.event_name == 'pull_request' && '60' || '500') }}
+          SEEDS: ${{ github.event.inputs.seeds || (github.event_name == 'push' && '60' || '500') }}
         run: |
           set -euo pipefail
           args=(--seeds "$SEEDS")

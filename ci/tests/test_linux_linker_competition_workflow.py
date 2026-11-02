@@ -10,12 +10,13 @@ def workflow_text() -> str:
 def test_competition_workflow_is_linux_vm_only_and_scoped_to_linux_perf_prs() -> None:
     text = workflow_text()
 
-    assert "pull_request:" in text
+    assert "pull_request" not in text.replace("Never runs on pull_request", "").replace("not on pull_request", "")
+    assert "push:\n    branches: [main]" in text
     assert "workflow_dispatch:" in text
     assert "schedule:" not in text
     assert "runs-on: ubuntu-24.04" in text
     assert "container:" not in text
-    assert "startsWith(github.head_ref, 'perf/linux/')" in text
+    assert "github.event_name == 'push' || github.event_name == 'workflow_dispatch'" in text
     assert "windows" not in text.lower()
     assert "macos" not in text.lower()
 
@@ -25,7 +26,7 @@ def test_competition_workflow_requires_exact_pr_or_manual_baseline_sha() -> None
 
     assert "baseline_sha:" in text
     assert "required: true" in text
-    assert "github.event.pull_request.base.sha" in text
+    assert "github.event.before" in text
     assert "^[0-9a-f]{40}$" in text
     assert 'git rev-parse --verify "$BASELINE_SHA^{commit}"' in text
     assert "git archive \"$BASELINE_SHA\" | tar -xf -" in text
