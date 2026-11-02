@@ -20,6 +20,7 @@ on:
       - .github/workflows/release.yml
       - ci/package_release.py
       - ci/release_manifest.py
+      - ci/sign_windows_release.py
       - ci/fetch_llvm_ld.py
       - ci/llvm_ld.lock.json
       - site/index.html
@@ -54,6 +55,7 @@ jobs:
       tag: ${{ steps.meta.outputs.tag }}
       checkout_ref: ${{ steps.meta.outputs.checkout_ref }}
       dry_run: ${{ steps.meta.outputs.dry_run }}
+      sign: ${{ steps.meta.outputs.sign }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
@@ -107,6 +109,16 @@ jobs:
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
           echo "checkout_ref=$CHECKOUT_REF" >> "$GITHUB_OUTPUT"
           echo "dry_run=$DRY_RUN" >> "$GITHUB_OUTPUT"
+
+          # Authenticode signing needs an OIDC subject Azure Artifact Signing
+          # trusts (refs/heads/main, tags, environments). A pull_request run's
+          # subject is not one of those (and fork PRs get no secrets), so a PR
+          # validates the unsigned pipeline; every other run signs or fails.
+          if [ "$EVENT_NAME" = "pull_request" ]; then
+            echo "sign=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "sign=true" >> "$GITHUB_OUTPUT"
+          fi
 
   # Native ELF targets: build, smoke-test, and package on the same runner —
   # no cross toolchain needed.
@@ -220,6 +232,12 @@ jobs:
     needs: preflight
     runs-on: ubuntu-24.04
     timeout-minutes: 45
+    # Job-level permissions replace the workflow block. This job only reads the
+    # repo (publish is the job that writes the release), plus id-token for the
+    # Windows Authenticode OIDC login (azure/login).
+    permissions:
+      contents: read
+      id-token: write
     strategy:
       fail-fast: false
       matrix:
@@ -284,6 +302,30 @@ jobs:
       - name: Stage llvm-ld-coff
         run: python3 ci/fetch_llvm_ld.py --triple "${{ matrix.target }}" --dest llvm-ld-coff
 
+      # Azure Artifact Signing (Authenticode). The Windows lanes cross-build on
+      # Linux, so the signer is a SHA-256-pinned jsign jar driven by the OIDC
+      # azure/login session (no client secret). It signs every PE the archive
+      # ships -- reld.exe, reld-link.exe and llvm_ld.dll -- after
+      # fetch_llvm_ld.py has verified the DLL against its lock and BEFORE
+      # packaging, so the archive, SHA256SUMS and manifest.json all describe
+      # signed bytes. The script fails the step if any PE is left unsigned.
+      - name: Azure login for Authenticode signing
+        if: needs.preflight.outputs.sign == 'true' && contains(matrix.target, 'windows')
+        uses: azure/login@a457da9ea143d694b1b9c7c869ebb04ebe844ef5 # v2.3.0
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          allow-no-subscriptions: true
+
+      - name: Authenticode-sign Windows binaries
+        if: needs.preflight.outputs.sign == 'true' && contains(matrix.target, 'windows')
+        env:
+          AZURE_SIGNING_ENDPOINT: ${{ secrets.AZURE_SIGNING_ENDPOINT }}
+          AZURE_SIGNING_ACCOUNT: ${{ secrets.AZURE_SIGNING_ACCOUNT }}
+          AZURE_SIGNING_PROFILE: ${{ secrets.AZURE_SIGNING_PROFILE }}
+          AZURE_SIGN_PUBLISHER: ${{ secrets.AZURE_SIGN_PUBLISHER }}
+        run: python3 ci/sign_windows_release.py sign --dir staging --dir llvm-ld-coff
+
       - name: Package release archive
         run: |
           python3 ci/package_release.py \
@@ -332,7 +374,7 @@ jobs:
       # is kept because that hand-off is part of the Windows product. The
       # version token is not asserted: build.rs makes it depend on checkout
       # depth and tags.
-      - name: Smoke the packaged reld.exe
+      - name: Smoke the packaged reld.exe and require Valid Authenticode
         shell: pwsh
         run: |
           $archive = Get-ChildItem dist -Filter "reld-v${{ needs.preflight.outputs.version }}-${{ matrix.target }}.zip"
@@ -355,6 +397,23 @@ jobs:
           if ($bridge -notmatch 'LLD') { throw "deployed reld --version missing the lld-link bridge marker" }
           # llvm_ld.dll ships next to reld.exe (reld#96), so the COFF link runs in-process.
           if ($bridge -notmatch 'in-process llvm-ld-coff') { throw "packaged reld did not use llvm-ld-coff in-process" }
+
+          # The cross build signs on Linux, where only a structural check is
+          # possible; this is Windows' own chain/timestamp/hash verdict on every
+          # PE inside the archive `publish` will ship (skipped on pull_request,
+          # whose runs are not signed -- see preflight).
+          if ('${{ needs.preflight.outputs.sign }}' -eq 'true') {
+            $pes = Get-ChildItem extracted -Recurse -File | Where-Object { $_.Extension -in '.exe', '.dll' }
+            if (-not $pes) { throw "no PE files found in the extracted archive" }
+            $bad = @()
+            foreach ($pe in $pes) {
+              $sig = Get-AuthenticodeSignature -LiteralPath $pe.FullName
+              Write-Output "$($sig.Status): $($pe.Name) [$($sig.SignerCertificate.Subject)]"
+              if ($sig.Status -ne 'Valid') { $bad += "$($pe.Name): $($sig.Status)" }
+            }
+            if ($bad) { throw "Windows release binaries without a Valid Authenticode signature: $($bad -join '; ')" }
+          }
+
 
   publish:
     name: Publish release

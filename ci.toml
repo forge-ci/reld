@@ -144,18 +144,20 @@ cache  = "machine"
 # ── Allowlists ─────────────────────────────────────────────────────────────────
 [allow]
 workflows         = { "ci.yml" = ["pull_request", "push:main", "merge_group", "workflow_dispatch"], "cross-ship.yml" = ["push:main", "schedule", "workflow_dispatch"], "linker-artifacts.yml" = ["pull_request", "push:main"], "linker-modes.yml" = ["pull_request", "push:main"], "release.yml" = ["push:tags"] }
-actions           = ["actions/checkout", "actions/upload-artifact", "actions/download-artifact", "zackees/setup-soldr", "astral-sh/setup-uv", "msys2/setup-msys2"]
+actions           = ["actions/checkout", "actions/upload-artifact", "actions/download-artifact", "zackees/setup-soldr", "astral-sh/setup-uv", "msys2/setup-msys2", "azure/login"]
+# Azure Artifact Signing (Authenticode) for the Windows release archives: azure/login is OIDC
+# (no client secret); these are org-level coordinates, not credentials (release.yml build-cross).
+secrets           = ["AZURE_CLIENT_ID", "AZURE_TENANT_ID", "AZURE_SIGNING_ENDPOINT", "AZURE_SIGNING_ACCOUNT", "AZURE_SIGNING_PROFILE", "AZURE_SIGN_PUBLISHER"]
 # reld calls `zackees/setup-soldr` directly from workflow steps (no composite
 # wrapper action), so `only-in` stays empty and the wrapper check does not apply.
 setup-soldr       = { only-in = "", require = { solo-toolchain-cache = "false", cook-delta = "false" } }
 setup-uv          = { require = { save-cache = "plan" } }
 tools             = ["soldr", "cargo", "uv", "python3", "git"]
-secrets           = []
 platform-selector = "crates/reld/src/platform.rs"
 platform-code     = ["crates/reld/src/platforms/**", "crates/reld-link/src/platforms/**"]
 # actions: write (SEC-002): cache-maint, plus the merge queue's cancel-superseded
 # and cache-janitor jobs (GEN-022, forge-ci/ci.yml#409/#405).
-permissions       = { "id-token: write" = ["release"], "actions: write" = ["cache-maint", "cancel-superseded", "cache-janitor"] }
+permissions       = { "id-token: write" = ["release", "build-cross"], "actions: write" = ["cache-maint", "cancel-superseded", "cache-janitor"] }
 
 # ── Publish ────────────────────────────────────────────────────────────────────
 # reld ships release binaries and a release site; it publishes nothing to PyPI.
