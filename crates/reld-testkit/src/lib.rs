@@ -424,6 +424,9 @@ mod tests {
     }
 
     #[test]
+    // Generates 11 full workloads through the filesystem: minutes natively interpreted,
+    // and it pushed the Miri job past its 30-minute timeout. Pure codegen, no unsafe.
+    #[cfg_attr(miri, ignore)]
     fn recursion_depth_is_never_reassigned() {
         // Seeds 263..432 overflowed the stack on every linker (Stress nightly, Oct 2026)
         // because the COMDAT mix was written back into the recursion depth `x`.
