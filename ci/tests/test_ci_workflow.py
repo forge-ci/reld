@@ -290,7 +290,7 @@ def test_phase1_msvc_and_macos_compile_on_linux_and_only_replay_on_target():
     cross_build = blocks["phase1-cross-build"]
     assert "runs-on: ubuntu-24.04" in cross_build
     assert "zackees/setup-soldr@main" in cross_build
-    assert "version: 0.9.18" in cross_build
+    assert "version: 0.9.45" in cross_build
     assert "soldr cargo nextest archive" in cross_build
     assert "x86_64-pc-windows-msvc" in cross_build
     assert "aarch64-apple-darwin" in cross_build
