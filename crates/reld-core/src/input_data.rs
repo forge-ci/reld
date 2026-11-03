@@ -1029,13 +1029,23 @@ impl Input {
                 })
             }
             InputSpec::Lib(lib_name) => {
+                // Exhaust the explicit search path (`-L` / `search_first`) for every candidate
+                // extension before consulting the host fallback. Otherwise a host-toolchain
+                // `lib<name>.so` (often a GNU ld script with absolute GROUP paths that only make
+                // sense inside its own sysroot) would shadow a `lib<name>.a` that `-L` already
+                // provides, and the link would fail opening e.g. `/lib64/libpthread.so.0`.
+                let mut candidates = Vec::with_capacity(3);
                 if self.modifiers.allow_shared {
-                    let filename = format!("lib{lib_name}.so");
-                    if let Some(path) = search_for_file_with_host_fallback(
+                    candidates.push(format!("lib{lib_name}.so"));
+                }
+                candidates.push(format!("lib{lib_name}.a"));
+                candidates.push(format!("lib{lib_name}.tbd"));
+                for filename in &candidates {
+                    if let Some(path) = search_for_file(
                         file_system,
                         args.lib_search_path(),
                         self.search_first.as_ref(),
-                        &filename,
+                        filename,
                     ) {
                         return Ok(InputPath {
                             absolute: std::path::absolute(&path)?,
@@ -1043,29 +1053,15 @@ impl Input {
                         });
                     }
                 }
-                let filename = format!("lib{lib_name}.a");
-                if let Some(path) = search_for_file_with_host_fallback(
-                    file_system,
-                    args.lib_search_path(),
-                    self.search_first.as_ref(),
-                    &filename,
-                ) {
-                    return Ok(InputPath {
-                        absolute: std::path::absolute(&path)?,
-                        original: PathBuf::from(filename),
-                    });
-                }
-                let filename = format!("lib{lib_name}.tbd");
-                if let Some(path) = search_for_file_with_host_fallback(
-                    file_system,
-                    args.lib_search_path(),
-                    self.search_first.as_ref(),
-                    &filename,
-                ) {
-                    return Ok(InputPath {
-                        absolute: std::path::absolute(&path)?,
-                        original: PathBuf::from(filename),
-                    });
+                for filename in &candidates {
+                    if let Some(path) =
+                        search_for_file_with_host_fallback(file_system, &[], None, filename)
+                    {
+                        return Ok(InputPath {
+                            absolute: std::path::absolute(&path)?,
+                            original: PathBuf::from(filename),
+                        });
+                    }
                 }
                 bail!("Couldn't find library `{lib_name}` on library search path");
             }
@@ -1513,5 +1509,55 @@ fn bare_crt_object_filename_resolves_via_host_fallback() {
     assert_eq!(
         resolved.absolute,
         std::path::absolute(fallback_dir.path().join("HostFallbackScrt1.o")).unwrap()
+    );
+}
+
+/// RED before the fix: with `-lpthread`, `-L` held only `libpthread.a` while the host fallback
+/// held a `libpthread.so` GNU ld script whose GROUP names the absolute `/lib64/libpthread.so.0`
+/// (glibc 2.17 / manylinux2014 sysroot layout). The `.so` probe consulted the host fallback before
+/// the `.a` probe consulted `-L`, so the host script won and the link failed with "Failed to open
+/// input file `/lib64/libpthread.so.0`" (Linker artifacts consumer-acceptance `cargo install xsv`).
+/// GREEN once every extension is tried on the explicit search path before any host fallback.
+#[test]
+fn explicit_search_path_static_lib_beats_host_fallback_shared_script() {
+    let _env_lock = crate::host_lib_search::test_support::ENV_LOCK
+        .lock()
+        .unwrap();
+    if !matches!(
+        crate::platforms::host::os(),
+        crate::platforms::host::HostOs::Linux
+    ) {
+        return;
+    }
+
+    let explicit_dir = tempfile::tempdir().expect("failed to create temp dir");
+    std::fs::write(explicit_dir.path().join("libpthread.a"), b"!<arch>\n").unwrap();
+    let fallback_dir = tempfile::tempdir().expect("failed to create temp dir");
+    std::fs::write(
+        fallback_dir.path().join("libpthread.so"),
+        b"OUTPUT_FORMAT(elf64-x86-64)\nGROUP ( /lib64/libpthread.so.0 /usr/lib64/libpthread_nonshared.a )\n",
+    )
+    .unwrap();
+    let _env = set_host_fallback_env_for_test(fallback_dir.path());
+
+    let mut args = crate::args::elf::ElfArgs::default();
+    args.lib_search_path.push(Box::from(explicit_dir.path()));
+    let file_system = crate::OsFileSystem::new();
+    let input = Input {
+        spec: InputSpec::Lib(Box::from("pthread")),
+        search_first: None,
+        modifiers: Modifiers {
+            allow_shared: true,
+            ..Modifiers::default()
+        },
+    };
+
+    let result = input.path(&args, &file_system);
+    crate::host_lib_search::reset_cache_for_test();
+
+    let resolved = result.expect("expected `-lpthread` to resolve");
+    assert_eq!(
+        resolved.absolute,
+        std::path::absolute(explicit_dir.path().join("libpthread.a")).unwrap()
     );
 }
