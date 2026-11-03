@@ -63,7 +63,7 @@ jobs:
         id: setup
         uses: zackees/setup-soldr@b782f606a2f3beadc35b9e3bf5b4565e005f52ed # v0.9.86
         with:
-          version: 0.9.10
+          version: 0.9.45
           cross-targets: ${{ matrix.target }}
           cache: false
           prebuild-deps: none
