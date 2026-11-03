@@ -226,6 +226,8 @@ mod tests {
     }
 
     #[test]
+    // `-print-search-dirs` is parsed with the host path separator; the fallback is Linux-only.
+    #[cfg(unix)]
     fn parses_print_search_dirs_libraries_line() {
         let output = "install: /usr/lib/gcc/x86_64-linux-gnu/12/\n\
                        programs: =/a:/b\n\
