@@ -226,13 +226,15 @@ mod tests {
     }
 
     #[test]
-    // `-print-search-dirs` is parsed with the host path separator; the fallback is Linux-only.
-    #[cfg(unix)]
     fn parses_print_search_dirs_libraries_line() {
-        let output = "install: /usr/lib/gcc/x86_64-linux-gnu/12/\n\
-                       programs: =/a:/b\n\
-                       libraries: =/a/lib:/b/lib:/c/lib\n";
-        let dirs = parse_search_dirs_output(output);
+        // `-print-search-dirs` is parsed with the host path separator, so build the line with
+        // it instead of selecting the host here (host selection belongs to `platforms`).
+        let libs = std::env::join_paths(["/a/lib", "/b/lib", "/c/lib"]).unwrap();
+        let output = format!(
+            "install: /usr/lib/gcc/x86_64-linux-gnu/12/\nlibraries: ={}\n",
+            libs.to_str().unwrap()
+        );
+        let dirs = parse_search_dirs_output(&output);
         assert_eq!(
             dirs,
             vec![
@@ -261,10 +263,11 @@ mod tests {
         let missing = tmp.path().join("missing");
 
         let ldflags = format!("-L{} -L{}", a.display(), a.display());
-        let library_path = format!("{}:{}", missing.display(), b.display());
+        let library_path = std::env::join_paths([&missing, &b]).unwrap();
+        let library_path = library_path.to_str().unwrap();
         let compiler_dirs = vec![a.clone(), b.clone()];
 
-        let dirs = merge_fallback_dirs(Some(&ldflags), Some(&library_path), compiler_dirs);
+        let dirs = merge_fallback_dirs(Some(&ldflags), Some(library_path), compiler_dirs);
         assert_eq!(dirs, vec![a, b]);
     }
 
