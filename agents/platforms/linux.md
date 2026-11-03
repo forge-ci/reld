@@ -25,6 +25,13 @@ and the root [`AGENTS.md`](../../AGENTS.md) first.
   See [`../../docs/MIMALLOC-PPROF.md`](../../docs/MIMALLOC-PPROF.md) for
   provenance and updates.
 
+Large ext4 outputs use preallocated mmap output by default. The former 256–512 MiB buffered
+policy (#78) adds a full-output flush copy and regresses the paired benchmark on current hosted
+runners. `--no-mmap-output-file` remains an explicit diagnostic override; Btrfs/vfat retain their
+buffered defaults. Compare default, mmap, and buffered modes with
+[`ci/benchmark_runner.py`](../../ci/benchmark_runner.py) before changing this policy; filesystem
+identity alone does not establish a performance win.
+
 ## Required evidence
 
 For performance-only native ELF changes, replay the same captured link with identical effective

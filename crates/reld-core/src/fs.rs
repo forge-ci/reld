@@ -532,7 +532,7 @@ impl FileSystem for OsFileSystem {
 
         let file_write_mode = options
             .write_mode
-            .unwrap_or_else(|| default_file_write_mode_for_file(&file, options.size));
+            .unwrap_or_else(|| default_file_write_mode_for_file(&file));
         let (default_fallocate, default_madvise_huge_pages) =
             default_mmap_setup_for_file(&file, file_write_mode, options.file_replacement_mode);
         let (fallocate_output_file, madvise_huge_pages) = resolve_mmap_setup(
@@ -684,31 +684,20 @@ fn should_parallel_buffer_write_for_filesystem_type(
         && (LARGE_EXT4_BUFFERED_OUTPUT_MIN..=LARGE_EXT4_BUFFERED_OUTPUT_MAX).contains(&output_size)
 }
 
-fn default_file_write_mode_for_file(file: &std::fs::File, output_size: u64) -> FileWriteMode {
-    default_file_write_mode_for_filesystem_type(
-        crate::platforms::fs::filesystem_kind(file),
-        output_size,
-    )
+fn default_file_write_mode_for_file(file: &std::fs::File) -> FileWriteMode {
+    default_file_write_mode_for_filesystem_type(crate::platforms::fs::filesystem_kind(file))
 }
 
 fn default_file_write_mode_for_filesystem_type(
     filesystem_kind: Option<FilesystemKind>,
-    output_size: u64,
 ) -> FileWriteMode {
     // Preserve the existing Btrfs/vfat policy at every size.
     if let Some(FilesystemKind::Btrfs | FilesystemKind::Vfat) = filesystem_kind {
         return FileWriteMode::BufferThenWrite;
     }
 
-    if filesystem_kind == Some(FilesystemKind::Ext4)
-        && (LARGE_EXT4_BUFFERED_OUTPUT_MIN..=LARGE_EXT4_BUFFERED_OUTPUT_MAX).contains(&output_size)
-    {
-        // Exact captured-link trials consistently show that writing one completed buffer is
-        // faster than faulting and dirtying a large ext4 mmap during parallel section writes.
-        // Keep the policy inside the measured range to avoid unbounded memory use on huge links.
-        return FileWriteMode::BufferThenWrite;
-    }
-
+    // Large ext4 outputs also use mmap: buffering adds an allocation and a second full-output
+    // copy during finish, which regressed the paired final-link gate (the #78 policy).
     FileWriteMode::Mmap
 }
 
@@ -747,67 +736,41 @@ mod tests {
     }
 
     #[test]
-    fn large_ext4_outputs_use_the_measured_buffered_policy() {
-        assert_eq!(
-            default_file_write_mode_for_filesystem_type(
-                Some(FilesystemKind::Ext4),
-                LARGE_EXT4_BUFFERED_OUTPUT_MIN,
-            ),
-            FileWriteMode::BufferThenWrite
-        );
+    fn large_ext4_outputs_avoid_the_buffered_flush_regression() {
+        for (kind, expected) in [
+            (Some(FilesystemKind::Ext4), FileWriteMode::Mmap),
+            (Some(FilesystemKind::Xfs), FileWriteMode::Mmap),
+            (Some(FilesystemKind::Other), FileWriteMode::Mmap),
+            (None, FileWriteMode::Mmap),
+            (Some(FilesystemKind::Btrfs), FileWriteMode::BufferThenWrite),
+            (Some(FilesystemKind::Vfat), FileWriteMode::BufferThenWrite),
+        ] {
+            assert_eq!(
+                default_file_write_mode_for_filesystem_type(kind),
+                expected,
+                "default output mode for {kind:?}",
+            );
+        }
+        // Explicit buffered output still uses the existing bounded parallel flush policy.
         assert!(should_parallel_buffer_write_for_filesystem_type(
             Some(FilesystemKind::Ext4),
             LARGE_EXT4_BUFFERED_OUTPUT_MIN,
         ));
-        assert!(!should_parallel_buffer_write_for_filesystem_type(
-            Some(FilesystemKind::Btrfs),
-            LARGE_EXT4_BUFFERED_OUTPUT_MIN,
+        assert!(should_parallel_buffer_write_for_filesystem_type(
+            Some(FilesystemKind::Ext4),
+            LARGE_EXT4_BUFFERED_OUTPUT_MAX,
         ));
         assert!(!should_parallel_buffer_write_for_filesystem_type(
             Some(FilesystemKind::Ext4),
             LARGE_EXT4_BUFFERED_OUTPUT_MAX + 1,
         ));
-        assert_eq!(
-            default_file_write_mode_for_filesystem_type(
-                Some(FilesystemKind::Ext4),
-                LARGE_EXT4_BUFFERED_OUTPUT_MAX,
-            ),
-            FileWriteMode::BufferThenWrite
-        );
-        assert_eq!(
-            default_file_write_mode_for_filesystem_type(
-                Some(FilesystemKind::Ext4),
-                LARGE_EXT4_BUFFERED_OUTPUT_MAX + 1,
-            ),
-            FileWriteMode::Mmap
-        );
-        assert_eq!(
-            default_file_write_mode_for_filesystem_type(
-                Some(FilesystemKind::Ext4),
-                64 * 1024 * 1024,
-            ),
-            FileWriteMode::Mmap
-        );
-        assert_eq!(
-            default_file_write_mode_for_filesystem_type(None, 256 * 1024 * 1024),
-            FileWriteMode::Mmap
-        );
-        assert_eq!(
-            default_file_write_mode_for_filesystem_type(
-                Some(FilesystemKind::Btrfs),
-                64 * 1024 * 1024,
-            ),
-            FileWriteMode::BufferThenWrite
-        );
-        assert_eq!(
-            default_file_write_mode_for_filesystem_type(Some(FilesystemKind::Vfat), 1),
-            FileWriteMode::BufferThenWrite
-        );
-        for kind in [Some(FilesystemKind::Xfs), Some(FilesystemKind::Other), None] {
-            assert_eq!(
-                default_file_write_mode_for_filesystem_type(kind, LARGE_EXT4_BUFFERED_OUTPUT_MIN),
-                FileWriteMode::Mmap
-            );
+        for kind in [
+            Some(FilesystemKind::Btrfs),
+            Some(FilesystemKind::Vfat),
+            Some(FilesystemKind::Xfs),
+            Some(FilesystemKind::Other),
+            None,
+        ] {
             assert!(!should_parallel_buffer_write_for_filesystem_type(
                 kind,
                 LARGE_EXT4_BUFFERED_OUTPUT_MIN,
