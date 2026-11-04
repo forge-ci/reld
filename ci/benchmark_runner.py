@@ -350,8 +350,14 @@ def assert_significant_workload(
         raise BenchmarkError("startup-dominated workload" + calibration + ":\n" + "\n".join(failures))
 
 
-def assert_output_mode_improvement(diagnostic_report: dict[str, object]) -> None:
-    """Require HEAD to beat the exact pre-issue baseline binary in every Linux row."""
+def _performance_change(improvement: float) -> str:
+    if improvement < 0:
+        return f"regressed {-improvement:.1%} versus baseline"
+    return f"improved {improvement:.1%} over baseline"
+
+
+def assert_output_mode_improvement(diagnostic_report: dict[str, object], *, log: TextIO | None = None) -> None:
+    """Require a 10% pooled gain and no row regression against the pinned baseline."""
     if diagnostic_report.get("status") != "measured":
         return
     configurations = diagnostic_report.get("configurations")
@@ -377,13 +383,22 @@ def assert_output_mode_improvement(diagnostic_report: dict[str, object]) -> None
         configuration_report["head_vs_baseline_improvement_fraction"] = improvement
         if isinstance(mmap_seconds, int | float) and mmap_seconds > 0:
             configuration_report["default_vs_mmap_improvement_fraction"] = 1.0 - (default_seconds / mmap_seconds)
+        message = (
+            f"{configuration.label}: HEAD {_performance_change(improvement)} "
+            f"(HEAD {default_seconds:.4f}s; baseline {baseline_seconds:.4f}s; "
+            f"required row improvement {MIN_OUTPUT_MODE_ROW_IMPROVEMENT:.0%})"
+        )
+        configuration_report["head_vs_baseline_message"] = message
+        if log is not None:
+            print(message, file=log, flush=True)
         if improvement + 1e-12 < MIN_OUTPUT_MODE_ROW_IMPROVEMENT:
-            failures.append(f"{configuration.label}: HEAD regressed {-improvement:.1%} versus baseline ({default_seconds:.4f}s vs {baseline_seconds:.4f}s)")
+            failures.append(message)
     if ratios and len(ratios) == len(CONFIGURATIONS):
         geomean_improvement = 1.0 - math.prod(ratios) ** (1.0 / len(ratios))
         diagnostic_report["head_vs_baseline_geomean_improvement_fraction"] = geomean_improvement
         if geomean_improvement + 1e-12 < MIN_OUTPUT_MODE_IMPROVEMENT:
-            failures.append(f"geometric mean: HEAD improved {geomean_improvement:.1%} over baseline (required {MIN_OUTPUT_MODE_IMPROVEMENT:.0%})")
+            failures.append(f"geometric mean: HEAD {_performance_change(geomean_improvement)} (required improvement {MIN_OUTPUT_MODE_IMPROVEMENT:.0%})")
+    diagnostic_report["performance_gate"] = {"status": "failed" if failures else "passed", "failures": failures}
     if failures:
         raise BenchmarkError("large-output optimization missed its paired performance gate:\n" + "\n".join(failures))
 
@@ -995,7 +1010,7 @@ def run_benchmark(
     output_mode_error: BenchmarkError | None = None
     if output_mode_report is not None and diagnostic_report is not None:
         try:
-            assert_output_mode_improvement(diagnostic_report)
+            assert_output_mode_improvement(diagnostic_report, log=sys.stdout)
         except BenchmarkError as error:
             output_mode_error = error
         output_mode_report.parent.mkdir(parents=True, exist_ok=True)
