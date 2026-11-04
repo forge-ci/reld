@@ -90,8 +90,8 @@ def rotated_order(labels: tuple[str, ...], round_index: int, *, seed: int) -> tu
 def bootstrap_improvement_ci(baseline: list[float], candidate: list[float], *, iterations: int = 20_000, seed: int = 93) -> tuple[float, float]:
     if not baseline or len(baseline) != len(candidate):
         raise BenchmarkFailure("paired bootstrap requires equal non-empty samples")
-    if any(value <= 0 for value in baseline + candidate):
-        raise BenchmarkFailure("paired bootstrap requires strictly positive measurements")
+    if any(not math.isfinite(value) or value <= 0 for value in baseline + candidate):
+        raise BenchmarkFailure("paired bootstrap requires strictly positive finite measurements")
     rng = random.Random(seed)
     improvements: list[float] = []
     for _ in range(iterations):
@@ -111,8 +111,8 @@ def bootstrap_geometric_improvement_ci(cells: list[tuple[list[float], list[float
         for baseline, candidate in cells:
             if not baseline or len(baseline) != len(candidate):
                 raise BenchmarkFailure("aggregate paired bootstrap requires equal non-empty cells")
-            if any(value <= 0 for value in baseline + candidate):
-                raise BenchmarkFailure("aggregate paired bootstrap requires strictly positive measurements")
+            if any(not math.isfinite(value) or value <= 0 for value in baseline + candidate):
+                raise BenchmarkFailure("aggregate paired bootstrap requires strictly positive finite measurements")
             indices = rng.choices(range(len(baseline)), k=len(baseline))
             base = statistics.median(baseline[index] for index in indices)
             cand = statistics.median(candidate[index] for index in indices)
@@ -181,7 +181,9 @@ def _prepare_command(captured: LinkCommand, binary: Path, output: Path, driver_d
     )
     if response is not None:
         raise BenchmarkFailure("Linux replay unexpectedly required a response file")
-    command.append("-Wl,--engine=reld")
+    # The fork parent exits on output notification without reaping the linking child.
+    # GNU time would then measure only the launcher CPU/RSS, often rounding CPU to zero.
+    command.extend(("-Wl,--engine=reld", "-Wl,--no-fork"))
     return command
 
 
@@ -317,7 +319,13 @@ def run(args: argparse.Namespace) -> dict[str, object]:
     _assert_no_profile_output(profile_dir)
     environment["RELD_DHAT_OUTPUT"] = str(profile_dir / "dhat-heap.json")
     report: dict[str, object] = {
-        "schema": 1,
+        "schema": 2,
+        "measurement": {
+            "backend": "/usr/bin/time -f %e %U %S %M",
+            "seconds_resolution": 0.01,
+            "linker_fork": False,
+            "scope": "driver and waited linker descendants; includes linker teardown",
+        },
         "authoritative": True,
         "baseline_revision": BASELINE_REVISION,
         "candidate_revision": args.source_revision,

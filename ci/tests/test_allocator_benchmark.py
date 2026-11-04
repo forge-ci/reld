@@ -9,6 +9,8 @@ from ci.allocator_benchmark import (
     _assert_hook_free,
     _assert_no_profile_output,
     _run_native,
+    _prepare_command,
+    _profile_improvements,
     _timed_link,
     bootstrap_geometric_improvement_ci,
     bootstrap_improvement_ci,
@@ -209,3 +211,29 @@ def test_source_cleanup_rejects_symlinked_parent(tmp_path: Path) -> None:
 
     with pytest.raises(ValueError, match="linked allocator cleanup parent"):
         cleanup([requested], tmp_path)
+
+
+def test_allocator_replay_waits_for_linker_resource_accounting(tmp_path: Path) -> None:
+    from ci.benchmark_runner import LinkCommand
+
+    captured = LinkCommand("clang", ("input.o", "-o", "app"), tmp_path / "app", False)
+    command = _prepare_command(captured, tmp_path / "reld", tmp_path / "out", tmp_path / "driver")
+
+    assert "-Wl,--no-fork" in command
+
+
+@pytest.mark.parametrize("value", [0.0, -0.01, float("nan"), float("inf")])
+def test_invalid_sample_names_profile_metric_vectors_and_evidence(tmp_path: Path, value: float) -> None:
+    samples = {
+        "system": [{"wall_seconds": 0.4, "cpu_seconds": 0.02, "peak_rss_kib": 75000.0}],
+        "mimalloc": [{"wall_seconds": 0.3, "cpu_seconds": value, "peak_rss_kib": 74000.0}],
+    }
+    capture_log = tmp_path / "capture.log"
+    with capture_log.open("w") as log, pytest.raises(BenchmarkFailure) as failure:
+        _profile_improvements("full-LTO", samples, seed=93, log=log)
+
+    assert str(failure.value) == (
+        "full-LTO/cpu_seconds: paired bootstrap requires strictly positive finite measurements; "
+        f"system=[0.02]; mimalloc=[{value!r}]; capture log: {capture_log}"
+    )
+    assert f"full-LTO/cpu_seconds: system=[0.02]; mimalloc=[{value!r}]" in capture_log.read_text()
