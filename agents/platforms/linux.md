@@ -211,6 +211,16 @@ and CPU time, peak RSS, dispersion, bootstrap confidence intervals, raw samples,
 artifact hashes, plus machine/toolchain provenance. The resulting JSON is evidence for #93; pprof
 and DHAT collection must be performed separately and must never be added to its timing cells.
 
+Current allocator replays pass `--no-fork` to both pinned linkers, including identity and
+diagnostic-profile runs. The normal fork parent returns on output notification without reaping
+the linking child, so GNU `time` otherwise misses that child's CPU and peak RSS; short launcher
+CPU samples can render as `0.00`. Schema 2 `timing.json` records this measurement scope and the
+GNU `time` 0.01-second resolution. It includes linker teardown and is not directly comparable
+with the earlier fork-enabled schema 1 wall/CPU/RSS evidence. Raw identity and exact native-output
+gates still apply before accepting samples. Non-positive or non-finite metric vectors fail with
+the profile, metric, both allocator vectors, and a pointer to the uploaded `replay/capture.log`;
+that log retains vectors even when no final `timing.json` can be written.
+
 ## Consumer acceptance
 
 The three-platform consumer job builds the host-named `reld` ELF driver through `setup-soldr`, then

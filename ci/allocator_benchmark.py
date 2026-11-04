@@ -20,6 +20,7 @@ import statistics
 import subprocess
 import sys
 from pathlib import Path
+from typing import TextIO
 
 from ci.benchmark_runner import (
     CONFIGURATIONS,
@@ -89,8 +90,8 @@ def rotated_order(labels: tuple[str, ...], round_index: int, *, seed: int) -> tu
 def bootstrap_improvement_ci(baseline: list[float], candidate: list[float], *, iterations: int = 20_000, seed: int = 93) -> tuple[float, float]:
     if not baseline or len(baseline) != len(candidate):
         raise BenchmarkFailure("paired bootstrap requires equal non-empty samples")
-    if any(value <= 0 for value in baseline + candidate):
-        raise BenchmarkFailure("paired bootstrap requires strictly positive measurements")
+    if any(not math.isfinite(value) or value <= 0 for value in baseline + candidate):
+        raise BenchmarkFailure("paired bootstrap requires strictly positive finite measurements")
     rng = random.Random(seed)
     improvements: list[float] = []
     for _ in range(iterations):
@@ -110,8 +111,8 @@ def bootstrap_geometric_improvement_ci(cells: list[tuple[list[float], list[float
         for baseline, candidate in cells:
             if not baseline or len(baseline) != len(candidate):
                 raise BenchmarkFailure("aggregate paired bootstrap requires equal non-empty cells")
-            if any(value <= 0 for value in baseline + candidate):
-                raise BenchmarkFailure("aggregate paired bootstrap requires strictly positive measurements")
+            if any(not math.isfinite(value) or value <= 0 for value in baseline + candidate):
+                raise BenchmarkFailure("aggregate paired bootstrap requires strictly positive finite measurements")
             indices = rng.choices(range(len(baseline)), k=len(baseline))
             base = statistics.median(baseline[index] for index in indices)
             cand = statistics.median(candidate[index] for index in indices)
@@ -180,7 +181,9 @@ def _prepare_command(captured: LinkCommand, binary: Path, output: Path, driver_d
     )
     if response is not None:
         raise BenchmarkFailure("Linux replay unexpectedly required a response file")
-    command.append("-Wl,--engine=reld")
+    # The fork parent exits on output notification without reaping the linking child.
+    # GNU time would then measure only the launcher CPU/RSS, often rounding CPU to zero.
+    command.extend(("-Wl,--engine=reld", "-Wl,--no-fork"))
     return command
 
 
@@ -274,6 +277,33 @@ def cleanup_ephemeral_outputs(target_dir: Path, workdir: Path) -> None:
             path.rmdir()
 
 
+def _profile_improvements(
+    profile: str, samples: dict[str, list[dict[str, float]]], *, seed: int, log: TextIO,
+) -> dict[str, dict[str, object]]:
+    metric_improvements: dict[str, dict[str, object]] = {}
+    for field in MEASURED_FIELDS:
+        baseline_values = [sample[field] for sample in samples["system"]]
+        candidate_values = [sample[field] for sample in samples["mimalloc"]]
+        print(f"{profile}/{field}: system={baseline_values!r}; mimalloc={candidate_values!r}", file=log, flush=True)
+        try:
+            ci_low, ci_high = bootstrap_improvement_ci(
+                baseline_values,
+                candidate_values,
+                seed=seed,
+            )
+        except BenchmarkFailure as error:
+            raise BenchmarkFailure(
+                f"{profile}/{field}: {error}; "
+                f"system={baseline_values!r}; mimalloc={candidate_values!r}; capture log: {log.name}"
+            ) from error
+        metric_improvements[field] = {
+            "improvement_fraction": 1.0 - statistics.median(candidate_values) / statistics.median(baseline_values),
+            "bootstrap_95_ci": [ci_low, ci_high],
+            "non_regressing": ci_low >= -NON_REGRESSION_MARGIN,
+        }
+    return metric_improvements
+
+
 def run(args: argparse.Namespace) -> dict[str, object]:
     if sys.platform != "linux":
         raise BenchmarkFailure("allocator timing is authoritative only on Linux")
@@ -289,7 +319,13 @@ def run(args: argparse.Namespace) -> dict[str, object]:
     _assert_no_profile_output(profile_dir)
     environment["RELD_DHAT_OUTPUT"] = str(profile_dir / "dhat-heap.json")
     report: dict[str, object] = {
-        "schema": 1,
+        "schema": 2,
+        "measurement": {
+            "backend": "/usr/bin/time -f %e %U %S %M",
+            "seconds_resolution": 0.01,
+            "linker_fork": False,
+            "scope": "driver and waited linker descendants; includes linker teardown",
+        },
         "authoritative": True,
         "baseline_revision": BASELINE_REVISION,
         "candidate_revision": args.source_revision,
@@ -425,20 +461,9 @@ def run(args: argparse.Namespace) -> dict[str, object]:
                     _assert_no_profile_output(profile_dir)
                     if round_index >= args.warmup:
                         samples[label].append(timing)
-            metric_improvements: dict[str, dict[str, object]] = {}
-            for field in MEASURED_FIELDS:
-                baseline_values = [sample[field] for sample in samples["system"]]
-                candidate_values = [sample[field] for sample in samples["mimalloc"]]
-                ci_low, ci_high = bootstrap_improvement_ci(
-                    baseline_values,
-                    candidate_values,
-                    seed=args.seed + config_index,
-                )
-                metric_improvements[field] = {
-                    "improvement_fraction": 1.0 - statistics.median(candidate_values) / statistics.median(baseline_values),
-                    "bootstrap_95_ci": [ci_low, ci_high],
-                    "non_regressing": ci_low >= -NON_REGRESSION_MARGIN,
-                }
+            metric_improvements = _profile_improvements(
+                configuration.label, samples, seed=args.seed + config_index, log=log,
+            )
             report["configurations"][configuration.label] = {
                 "captured_command": {
                     "executable": captured.executable,
