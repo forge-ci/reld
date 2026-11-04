@@ -20,6 +20,7 @@ import statistics
 import subprocess
 import sys
 from pathlib import Path
+from typing import TextIO
 
 from ci.benchmark_runner import (
     CONFIGURATIONS,
@@ -274,6 +275,33 @@ def cleanup_ephemeral_outputs(target_dir: Path, workdir: Path) -> None:
             path.rmdir()
 
 
+def _profile_improvements(
+    profile: str, samples: dict[str, list[dict[str, float]]], *, seed: int, log: TextIO,
+) -> dict[str, dict[str, object]]:
+    metric_improvements: dict[str, dict[str, object]] = {}
+    for field in MEASURED_FIELDS:
+        baseline_values = [sample[field] for sample in samples["system"]]
+        candidate_values = [sample[field] for sample in samples["mimalloc"]]
+        print(f"{profile}/{field}: system={baseline_values!r}; mimalloc={candidate_values!r}", file=log, flush=True)
+        try:
+            ci_low, ci_high = bootstrap_improvement_ci(
+                baseline_values,
+                candidate_values,
+                seed=seed,
+            )
+        except BenchmarkFailure as error:
+            raise BenchmarkFailure(
+                f"{profile}/{field}: {error}; "
+                f"system={baseline_values!r}; mimalloc={candidate_values!r}; capture log: {log.name}"
+            ) from error
+        metric_improvements[field] = {
+            "improvement_fraction": 1.0 - statistics.median(candidate_values) / statistics.median(baseline_values),
+            "bootstrap_95_ci": [ci_low, ci_high],
+            "non_regressing": ci_low >= -NON_REGRESSION_MARGIN,
+        }
+    return metric_improvements
+
+
 def run(args: argparse.Namespace) -> dict[str, object]:
     if sys.platform != "linux":
         raise BenchmarkFailure("allocator timing is authoritative only on Linux")
@@ -425,27 +453,9 @@ def run(args: argparse.Namespace) -> dict[str, object]:
                     _assert_no_profile_output(profile_dir)
                     if round_index >= args.warmup:
                         samples[label].append(timing)
-            metric_improvements: dict[str, dict[str, object]] = {}
-            for field in MEASURED_FIELDS:
-                baseline_values = [sample[field] for sample in samples["system"]]
-                candidate_values = [sample[field] for sample in samples["mimalloc"]]
-                print(f"{configuration.label}/{field}: system={baseline_values!r}; mimalloc={candidate_values!r}", file=log, flush=True)
-                try:
-                    ci_low, ci_high = bootstrap_improvement_ci(
-                        baseline_values,
-                        candidate_values,
-                        seed=args.seed + config_index,
-                    )
-                except BenchmarkFailure as error:
-                    raise BenchmarkFailure(
-                        f"{configuration.label}/{field}: {error}; "
-                        f"system={baseline_values!r}; mimalloc={candidate_values!r}; capture log: {log_path}"
-                    ) from error
-                metric_improvements[field] = {
-                    "improvement_fraction": 1.0 - statistics.median(candidate_values) / statistics.median(baseline_values),
-                    "bootstrap_95_ci": [ci_low, ci_high],
-                    "non_regressing": ci_low >= -NON_REGRESSION_MARGIN,
-                }
+            metric_improvements = _profile_improvements(
+                configuration.label, samples, seed=args.seed + config_index, log=log,
+            )
             report["configurations"][configuration.label] = {
                 "captured_command": {
                     "executable": captured.executable,
