@@ -272,7 +272,8 @@ def test_four_diagnostic_contenders_each_occupy_every_round_position(tmp_path: P
         assert {order.index(linker.label) for order in orders} == {0, 1, 2, 3}
 
 
-def test_linux_output_mode_report_retains_metadata_samples_sizes_and_phases(tmp_path: Path, monkeypatch):
+@pytest.mark.parametrize("head_seconds,passes", [(0.75, True), (0.95, False), (1.2, False), (1.02, False)])
+def test_linux_output_mode_report_retains_metadata_samples_sizes_and_phases(tmp_path: Path, monkeypatch, capsys, head_seconds, passes):
     report_path = tmp_path / "output-modes.json"
     baseline_reld = tmp_path / "baseline-reld"
     baseline_reld.write_bytes(b"baseline")
@@ -286,7 +287,7 @@ def test_linux_output_mode_report_retains_metadata_samples_sizes_and_phases(tmp_
     def fake_round_robin(captured, linkers, **kwargs):
         del captured
         trial_count = kwargs["trials"]
-        samples = {linker.label: ([0.8] * trial_count if linker.label == "default" else [1.0] * trial_count) for linker in linkers}
+        samples = {linker.label: ([head_seconds] * trial_count if linker.label == "default" else [1.0] * trial_count) for linker in linkers}
         sizes = {linker.label: [256 * 1024 * 1024] * trial_count for linker in linkers}
         orders = [[linker.label for linker in linkers]] * trial_count
         return ({linker.label: statistics.median(samples[linker.label]) for linker in linkers}, samples, sizes, orders)
@@ -319,21 +320,34 @@ def test_linux_output_mode_report_retains_metadata_samples_sizes_and_phases(tmp_
         ),
     )
 
-    runner_module.run_benchmark(
-        target="x86_64-linux",
-        reld=tmp_path / "reld",
-        manifest=tmp_path / "Cargo.toml",
-        workdir=tmp_path / "work",
-        target_dir=tmp_path / "target",
-        cargo="cargo",
-        trials=3,
-        warmup=1,
-        log=StringIO(),
-        output_mode_report=report_path,
-        baseline_reld=baseline_reld,
-    )
+    def run():
+        return runner_module.run_benchmark(
+            target="x86_64-linux",
+            reld=tmp_path / "reld",
+            manifest=tmp_path / "Cargo.toml",
+            workdir=tmp_path / "work",
+            target_dir=tmp_path / "target",
+            cargo="cargo",
+            trials=3,
+            warmup=1,
+            log=StringIO(),
+            output_mode_report=report_path,
+            baseline_reld=baseline_reld,
+        )
 
+    if passes:
+        assert "## Link Benchmark: x86_64-linux" in run()
+    else:
+        with pytest.raises(BenchmarkError):
+            run()
+    output = capsys.readouterr().out
+    assert "improved -" not in output
+    direction = "improved" if head_seconds < 1 else "regressed"
+    for configuration in CONFIGURATIONS:
+        assert f"{configuration.label}: HEAD {direction}" in output
+        assert f"HEAD {head_seconds:.4f}s; baseline 1.0000s" in output
     report = json.loads(report_path.read_text(encoding="utf-8"))
+    assert report["performance_gate"]["status"] == ("passed" if passes else "failed")
     assert report["status"] == "measured"
     assert report["metadata"]["filesystem"] == "ext4"
     assert report["metadata"]["timing_scope"] == "captured final native link only"
@@ -341,7 +355,7 @@ def test_linux_output_mode_report_retains_metadata_samples_sizes_and_phases(tmp_
     no_lto = report["configurations"]["no-LTO"]
     assert set(no_lto["modes"]) == {"baseline", "default", "mmap", "buffer"}
     assert no_lto["trials_per_mode"] == 4
-    assert no_lto["modes"]["default"]["samples_seconds"] == [0.8] * 4
+    assert no_lto["modes"]["default"]["samples_seconds"] == [head_seconds] * 4
     assert no_lto["modes"]["default"]["output_sizes_bytes"] == [256 * 1024 * 1024] * 4
     assert no_lto["modes"]["default"]["phase_seconds"]["Write data to file"] == 0.7
 
@@ -845,3 +859,26 @@ def test_non_windows_benchmark_environment_is_inherited(monkeypatch: pytest.Monk
 
     assert benchmark_environment()["RELD_BENCHMARK_TEST"] == "present"
     assert benchmark_environment() is not os.environ
+
+
+@pytest.mark.parametrize("head,baseline,expected", [
+    (0.3889, 0.5198, "improved 25.2% over baseline"),
+    (0.3558, 0.4813, "improved 26.1% over baseline"),
+    (0.5198, 0.3889, "regressed 33.7% versus baseline"),
+    (0.4813, 0.3558, "regressed 35.3% versus baseline"),
+    (0.3907, 0.3735, "regressed 4.6% versus baseline"),
+])
+def test_gate_labels_direction_and_operand_order(head, baseline, expected):
+    report = {"status": "measured", "configurations": {
+        config.label: {"modes": {"default": {"median_seconds": head},
+                                  "baseline": {"median_seconds": baseline}}}
+        for config in CONFIGURATIONS
+    }}
+    log = StringIO()
+    try:
+        assert_output_mode_improvement(report, log=log)
+    except BenchmarkError as error:
+        assert "improved -" not in str(error)
+    for config in CONFIGURATIONS:
+        assert f"{config.label}: HEAD {expected} (HEAD {head:.4f}s; baseline {baseline:.4f}s; required row improvement 0%)" in log.getvalue()
+    assert "improved -" not in log.getvalue()
