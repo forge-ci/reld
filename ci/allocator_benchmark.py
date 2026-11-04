@@ -429,11 +429,18 @@ def run(args: argparse.Namespace) -> dict[str, object]:
             for field in MEASURED_FIELDS:
                 baseline_values = [sample[field] for sample in samples["system"]]
                 candidate_values = [sample[field] for sample in samples["mimalloc"]]
-                ci_low, ci_high = bootstrap_improvement_ci(
-                    baseline_values,
-                    candidate_values,
-                    seed=args.seed + config_index,
-                )
+                print(f"{configuration.label}/{field}: system={baseline_values!r}; mimalloc={candidate_values!r}", file=log, flush=True)
+                try:
+                    ci_low, ci_high = bootstrap_improvement_ci(
+                        baseline_values,
+                        candidate_values,
+                        seed=args.seed + config_index,
+                    )
+                except BenchmarkFailure as error:
+                    raise BenchmarkFailure(
+                        f"{configuration.label}/{field}: {error}; "
+                        f"system={baseline_values!r}; mimalloc={candidate_values!r}; capture log: {log_path}"
+                    ) from error
                 metric_improvements[field] = {
                     "improvement_fraction": 1.0 - statistics.median(candidate_values) / statistics.median(baseline_values),
                     "bootstrap_95_ci": [ci_low, ci_high],
