@@ -370,7 +370,7 @@ def test_phase1_summary_only_relaxes_missing_log_validation_after_failure():
 def test_dylint_job_pins_setup_soldr_and_skips_the_registry_layer():
     dylint = _job_blocks(WORKFLOW.read_text())["dylint"]
     assert "zackees/setup-soldr@v0" not in dylint, "dylint must pin setup-soldr to a SHA, not float on @v0"
-    assert "zackees/setup-soldr@bf522834325fdf22eb7091f186ac33034ceb6e66" in dylint
+    assert "zackees/setup-soldr@c6f5541a9a528a5bd3a4dfee911dee3d61cf6db0" in dylint
     # The legacy-v1 cargo-registry archive drops dylint_internal's template.tar.
     assert 'cargo-registry-cache: "false"' in dylint
 
