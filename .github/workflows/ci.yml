@@ -170,7 +170,7 @@ jobs:
       # restores 15849 files and drops dylint_internal-6.2.0/template.tar,
       # breaking every later `cargo test` here; cargo fetches sources fresh.
       - name: Set up Soldr with managed Dylint
-        uses: zackees/setup-soldr@bf522834325fdf22eb7091f186ac33034ceb6e66 # v0 @ 2026-10-31
+        uses: zackees/setup-soldr@c6f5541a9a528a5bd3a4dfee911dee3d61cf6db0 # v0 @ 2026-10-31
         with:
           cache: true
           cargo-registry-cache: "false"
