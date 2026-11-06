@@ -298,9 +298,11 @@ fn decode_response_file(path: &Path) -> Result<String> {
         || (bytes.len() >= 2 && bytes.len().is_multiple_of(2) && bytes[1] == 0)
     {
         let words: Vec<u16> = bytes
-            .chunks_exact(2)
+            .as_chunks::<2>()
+            .0
+            .iter()
             .skip(usize::from(bytes.starts_with(&[0xff, 0xfe])))
-            .map(|pair| u16::from_le_bytes([pair[0], pair[1]]))
+            .map(|pair| u16::from_le_bytes(*pair))
             .collect();
         return String::from_utf16(&words)
             .with_context(|| format!("Invalid UTF-16 linker response file `{}`", path.display()));
