@@ -64,7 +64,7 @@ jobs:
         shell: bash
         run: choco install llvm --no-progress -y
 
-      - uses: dtolnay/rust-toolchain@4716b85f2fac3e324e64fa2810f6b5c3905760a5 # 1.97.1
+      - uses: dtolnay/rust-toolchain@18f0487477426dce244608110aa2660c2893deb7 # 1.98.1
 
       - name: Build stress harness
         run: cargo build --release --bin reld-stress

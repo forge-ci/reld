@@ -21,8 +21,8 @@ def test_clang_replay_pins_baseline_toolchain_and_lock() -> None:
 
     assert "6ec92be6674d026e74f7524271fbcbce68b50a39" in text
     assert (
-        "rust:1.97.1-bookworm@sha256:"
-        "0e2bcaef56d041a486784e54104a81aebe0da44bd03019bd70bc0401e42e4a97"
+        "rust:1.98.1-bookworm@sha256:"
+        "93ce27a88655056a51dbdd8f5f2d7ddc071c7b0070fb288a37b5a285fc83971e"
     ) in text
     assert "actions/checkout@11d5960a326750d5838078e36cf38b85af677262" in text
     assert "astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d" in text

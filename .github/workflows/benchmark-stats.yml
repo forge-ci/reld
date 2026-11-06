@@ -152,7 +152,7 @@ jobs:
         with:
           toolset: "14.44"
 
-      - uses: dtolnay/rust-toolchain@4716b85f2fac3e324e64fa2810f6b5c3905760a5 # 1.97.1
+      - uses: dtolnay/rust-toolchain@18f0487477426dce244608110aa2660c2893deb7 # 1.98.1
 
       - name: Free Linux runner disk for retained linker inputs
         if: runner.os == 'Linux'
@@ -172,7 +172,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y clang lld mold python3-pil
           # Pinned: wild-linker 0.11.0 (2026-10-24) requires rustc >= 1.99 and broke this
-          # step against the pinned 1.97.1 toolchain. Matches the wild pin in ci/linker_setup.py.
+          # step against the pinned 1.98.1 toolchain. Matches the wild pin in ci/linker_setup.py.
           cargo install --locked wild-linker --version 0.9.0
           ln -sf "$(command -v wild)" "$HOME/.cargo/bin/ld.wild"
           for l in ld.lld ld.mold ld.wild; do

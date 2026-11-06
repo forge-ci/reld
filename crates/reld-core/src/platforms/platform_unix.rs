@@ -65,8 +65,8 @@ pub mod linker_plugin {
     pub fn increase_file_limit() -> std::io::Result<()> {
         use nix::sys::resource::Resource;
 
-        let (_soft, hard) = nix::sys::resource::getrlimit(Resource::RLIMIT_NOFILE)
-            .map_err(std::io::Error::from)?;
+        let (_soft, hard) =
+            nix::sys::resource::getrlimit(Resource::RLIMIT_NOFILE).map_err(std::io::Error::from)?;
         nix::sys::resource::setrlimit(Resource::RLIMIT_NOFILE, hard, hard)
             .map_err(std::io::Error::from)?;
         Ok(())

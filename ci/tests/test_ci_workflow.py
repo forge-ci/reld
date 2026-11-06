@@ -175,7 +175,7 @@ def test_github_asset_with_no_digest_is_rejected():
         raise AssertionError("missing GitHub asset digest must be rejected")
 
 
-def test_normal_toolchains_pin_the_rust_1971_msrv():
+def test_normal_toolchains_pin_the_rust_1981_msrv():
     rust_toolchain = (REPO_ROOT / "rust-toolchain.toml").read_text(encoding="utf-8")
     manifest = (REPO_ROOT / "Cargo.toml").read_text(encoding="utf-8")
     workflow_texts = [
@@ -183,10 +183,10 @@ def test_normal_toolchains_pin_the_rust_1971_msrv():
         for name in ("ci.yml", "linker-modes.yml", "stress.yml", "benchmark-stats.yml")
     ]
 
-    assert 'rust-version = "1.97.1"' in manifest
-    assert 'channel = "1.97.1"' in rust_toolchain
-    assert "RUST_VERSION: 1.97.1" in workflow_texts[0]
-    assert all("4716b85f2fac3e324e64fa2810f6b5c3905760a5 # 1.97.1" in text for text in workflow_texts)
+    assert 'rust-version = "1.98.1"' in manifest
+    assert 'channel = "1.98.1"' in rust_toolchain
+    assert "RUST_VERSION: 1.98.1" in workflow_texts[0]
+    assert all("18f0487477426dce244608110aa2660c2893deb7 # 1.98.1" in text for text in workflow_texts)
 
 
 def test_ci_caches_linux_reference_linkers():
