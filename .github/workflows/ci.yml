@@ -33,7 +33,7 @@ permissions:
 env:
   CARGO_TERM_COLOR: always
   CARGO_COMMAND: cargo
-  RUST_VERSION: 1.97.1
+  RUST_VERSION: 1.98.1
   NIGHTLY_TOOLCHAIN: nightly-2026-08-01
   CLANG_VERSION: 22.1.8
   CLANG_PACKAGE_VERSION: "1:22.1.8~++20260714014902+ca7933e47d3a-1~exp1~20260714135019.80"
@@ -134,7 +134,7 @@ jobs:
       - name: Enforce approved Rust dependency graph
         run: python3 ci/check_dependencies.py
 
-      - uses: dtolnay/rust-toolchain@4716b85f2fac3e324e64fa2810f6b5c3905760a5 # 1.97.1
+      - uses: dtolnay/rust-toolchain@18f0487477426dce244608110aa2660c2893deb7 # 1.98.1
         with:
           components: rustfmt, clippy
       - uses: taiki-e/install-action@8261f1f64137bdbc4bc1035170d52408e108cbd4 # cargo-deny
@@ -256,7 +256,7 @@ jobs:
         with:
           version: 18.1.8
 
-      - uses: dtolnay/rust-toolchain@4716b85f2fac3e324e64fa2810f6b5c3905760a5 # 1.97.1
+      - uses: dtolnay/rust-toolchain@18f0487477426dce244608110aa2660c2893deb7 # 1.98.1
         with:
           targets: ${{ matrix.target }}
 
@@ -666,7 +666,7 @@ jobs:
         with:
           version: 18.1.8
 
-      - uses: dtolnay/rust-toolchain@4716b85f2fac3e324e64fa2810f6b5c3905760a5 # 1.97.1
+      - uses: dtolnay/rust-toolchain@18f0487477426dce244608110aa2660c2893deb7 # 1.98.1
         with:
           targets: ${{ matrix.target }}
 
