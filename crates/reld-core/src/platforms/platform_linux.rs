@@ -164,9 +164,7 @@ pub mod process {
             pub fn disable_and_read(&mut self) -> Vec<u64> {
                 self.counters
                     .iter_mut()
-                    .filter_map(|counter| {
-                        counter.disable().ok().and_then(|()| counter.read().ok())
-                    })
+                    .filter_map(|counter| counter.disable().ok().and_then(|()| counter.read().ok()))
                     .collect()
             }
         }
@@ -178,8 +176,12 @@ pub mod process {
                 CounterKind::CacheMisses => perf_event::events::Hardware::CACHE_MISSES.into(),
                 CounterKind::BranchMisses => perf_event::events::Hardware::BRANCH_MISSES.into(),
                 CounterKind::PageFaults => perf_event::events::Software::PAGE_FAULTS.into(),
-                CounterKind::PageFaultsMinor => perf_event::events::Software::PAGE_FAULTS_MIN.into(),
-                CounterKind::PageFaultsMajor => perf_event::events::Software::PAGE_FAULTS_MAJ.into(),
+                CounterKind::PageFaultsMinor => {
+                    perf_event::events::Software::PAGE_FAULTS_MIN.into()
+                }
+                CounterKind::PageFaultsMajor => {
+                    perf_event::events::Software::PAGE_FAULTS_MAJ.into()
+                }
                 CounterKind::L1dRead => perf_event::events::Cache {
                     which: perf_event::events::WhichCache::L1D,
                     operation: perf_event::events::CacheOp::READ,
