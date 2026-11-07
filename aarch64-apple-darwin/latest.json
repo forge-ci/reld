@@ -1,0 +1,133 @@
+{
+  "schema_version": 6,
+  "benchmark_id": "artifact-auditor-native-linux-lto-v2",
+  "metadata": {
+    "generated_at": "2026-11-07T16:11:29Z",
+    "repository": "forge-ci/reld",
+    "git_sha": "6ab41368d686c7c2eec570182dd11d7d6ddf1efe",
+    "git_ref": "refs/heads/main",
+    "run_url": "https://github.com/forge-ci/reld/actions/runs/42387403244",
+    "target": "aarch64-apple-darwin",
+    "benchmark": {
+      "id": "artifact-auditor-native-linux-lto-v2",
+      "workload": "ci/e2e/link-workload",
+      "configurations": [
+        "no-LTO",
+        "ThinLTO",
+        "full-LTO"
+      ]
+    },
+    "runner": {
+      "os": "Darwin",
+      "arch": "arm64",
+      "platform": "macOS-15.8.2-arm64-arm-64bit-Mach-O",
+      "cpu_count": 3
+    },
+    "versions": {
+      "clang": "Homebrew clang version 23.1.4",
+      "mold": null,
+      "wild": null,
+      "ld.lld": "Homebrew LLD 23.1.4 (compatible with GNU linkers)"
+    },
+    "raw_image_base_url": "https://raw.githubusercontent.com/forge-ci/reld/benchmark-stats",
+    "raw_image_url": "https://raw.githubusercontent.com/forge-ci/reld/benchmark-stats/aarch64-apple-darwin/benchmark-link.jpg",
+    "pages_url": null
+  },
+  "results": [
+    {
+      "configuration": "no-LTO",
+      "series": "ld",
+      "seconds": 2.3466,
+      "status": "measured",
+      "mode": "reference",
+      "engine": "ld"
+    },
+    {
+      "configuration": "no-LTO",
+      "series": "ld64.lld",
+      "seconds": 2.6818,
+      "status": "measured",
+      "mode": "reference",
+      "engine": "ld64.lld"
+    },
+    {
+      "configuration": "no-LTO",
+      "series": "reld",
+      "seconds": 3.0004,
+      "status": "measured",
+      "mode": "bridge",
+      "engine": "ld64.lld"
+    },
+    {
+      "configuration": "ThinLTO",
+      "series": "ld",
+      "seconds": 2.804,
+      "status": "measured",
+      "mode": "reference",
+      "engine": "ld"
+    },
+    {
+      "configuration": "ThinLTO",
+      "series": "ld64.lld",
+      "seconds": 3.7323,
+      "status": "measured",
+      "mode": "reference",
+      "engine": "ld64.lld"
+    },
+    {
+      "configuration": "ThinLTO",
+      "series": "reld",
+      "seconds": 2.826,
+      "status": "measured",
+      "mode": "bridge",
+      "engine": "ld64.lld"
+    },
+    {
+      "configuration": "full-LTO",
+      "series": "ld",
+      "seconds": 2.645,
+      "status": "measured",
+      "mode": "reference",
+      "engine": "ld"
+    },
+    {
+      "configuration": "full-LTO",
+      "series": "ld64.lld",
+      "seconds": 2.3803,
+      "status": "measured",
+      "mode": "reference",
+      "engine": "ld64.lld"
+    },
+    {
+      "configuration": "full-LTO",
+      "series": "reld",
+      "seconds": 2.3853,
+      "status": "measured",
+      "mode": "bridge",
+      "engine": "ld64.lld"
+    }
+  ],
+  "startup": [
+    {
+      "series": "ld",
+      "seconds": 0.0221,
+      "status": "measured",
+      "mode": "reference",
+      "engine": "ld"
+    },
+    {
+      "series": "ld64.lld",
+      "seconds": 0.0238,
+      "status": "measured",
+      "mode": "reference",
+      "engine": "ld64.lld"
+    },
+    {
+      "series": "reld",
+      "seconds": 0.1618,
+      "status": "measured",
+      "mode": "bridge",
+      "engine": "ld64.lld"
+    }
+  ]
+}
