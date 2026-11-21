@@ -16,6 +16,10 @@ on:
         description: "Number of seeds to run"
         required: false
         default: "500"
+      forge_pool:
+        description: "RUN-005 canary: use the forge pool even while FORGE_POOL_LABELS is unset"
+        type: boolean
+        default: false
   schedule:
     # Nightly, offset off the hour to avoid the Actions rush.
     - cron: "23 7 * * *"
@@ -30,9 +34,39 @@ concurrency:
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
+  # Forge pool (forge-ci/gh-runner docs/pool.md): picks the self-hosted Dell
+  # pool for the Linux stress legs when the repo variable FORGE_POOL_LABELS is set
+  # and the pool has an idle runner, else hosted. pool-select keeps fork PRs
+  # and pull_request_target hosted (trusted-only, the default). Unset
+  # FORGE_POOL_LABELS to send the job back to hosted at once.
+  pool:
+    name: Select runner
+    # Skipped while routing is off: the job below then runs hosted.
+    if: vars.FORGE_POOL_LABELS != '' || inputs.forge_pool
+    # forge-quick through the kill switch (RUN-004).
+    runs-on: ${{ vars.FORGE_QUICK_LABELS != '' && fromJSON(vars.FORGE_QUICK_LABELS) || 'ubuntu-24.04' }}
+    timeout-minutes: 2
+    permissions: {}
+    outputs:
+      runs-on: ${{ steps.select.outputs.runs-on || '"ubuntu-24.04"' }}
+    steps:
+      - name: Select pool or hosted
+        id: select
+        continue-on-error: true
+        uses: forge-ci/ci.yml/actions/pool-select@a36bc81ad6ada5fb17398e3e7ba38435cc67a951 # ci.yml#550, tokenless signal source
+        with:
+          # The variable is the kill switch; a manual `forge_pool` dispatch
+          # proves one real job on the pool before the variable is set.
+          labels: ${{ vars.FORGE_POOL_LABELS || (inputs.forge_pool && '["self-hosted","forge-pool"]' || '') }}
+          fallback: ubuntu-24.04
+
   stress:
     name: ${{ matrix.os }} / ${{ matrix.linker || 'default' }}
-    runs-on: ${{ matrix.os }}
+    needs: pool
+    # Runs when the selector was skipped (routing off) or failed, too: the
+    # Linux legs then run hosted. Only they can use the pool.
+    if: ${{ !cancelled() }}
+    runs-on: ${{ matrix.os == 'ubuntu-24.04' && fromJSON(needs.pool.outputs.runs-on || '"ubuntu-24.04"') || matrix.os }}
     timeout-minutes: 45
     strategy:
       fail-fast: false
