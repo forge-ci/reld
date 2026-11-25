@@ -12,6 +12,10 @@ on:
         description: Verify the fresh Rust compiler cache is on tmpfs and reusable
         default: false
         type: boolean
+      verify_ram_assets:
+        description: Verify asset restore and publication on the bounded tmpfs
+        default: false
+        type: boolean
 
 permissions: {}
 
@@ -30,9 +34,24 @@ jobs:
         env:
           PROFILE: ${{ inputs.profile }}
           VERIFY_RAM_CACHE: ${{ inputs.verify_ram_cache }}
+          VERIFY_RAM_ASSETS: ${{ inputs.verify_ram_assets }}
         run: |
           set -euo pipefail
           test -d "$SOLDRIX_WORKSPACE"
+          if [[ "$VERIFY_RAM_ASSETS" == true ]]; then
+            assets=/var/cache/obs-runner/assets
+            test "$(stat -f -c %T "$assets")" = tmpfs
+            test "$(stat -c %a "$assets")" = 1777
+            restored=$(find "$assets" -maxdepth 1 -type f -size +100M -print -quit)
+            test -n "$restored"
+            test "$(sha256sum "$restored" | cut -d ' ' -f 1)" = "${restored##*/}"
+            pending=$(mktemp "$assets/.soldrix-canary.XXXXXXXX.part")
+            printf 'soldrix RAM asset canary %s\n' "$GITHUB_RUN_ID" > "$pending"
+            hash=$(sha256sum "$pending" | cut -d ' ' -f 1)
+            chmod 0644 "$pending"
+            mv "$pending" "$assets/$hash"
+            printf 'shared_asset_cache=tmpfs restored_and_published=true\n'
+          fi
           case "$PROFILE" in
             go)
               cd "$SOLDRIX_WORKSPACE/.mixed-test"
