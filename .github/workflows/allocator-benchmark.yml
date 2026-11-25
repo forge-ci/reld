@@ -113,7 +113,9 @@ jobs:
           printf 'workload=%s runner=%s\n' "$PROFILE" "$RUNNER_NAME"
           if [[ "$VERIFY_DURABLE_HANDOFF" == true ]]; then
             handoff=/var/cache/obs-runner/handoff
-            store="$handoff/.soldrix-canary"
+            store="$SOLDRIX_DURABLE_HANDOFF"
+            test "$(stat -f -c %T "$store")" = btrfs
+            test "$(stat -c %d:%i "$store")" != "$(stat -c %d:%i "$handoff")"
             sample=$(find "$handoff" -mindepth 2 -maxdepth 2 -type f -name tier2-tree.tar.zst -size +100M -print -quit)
             test -n "$sample"
             test -r "${sample%/*}/runtime-packages.txt"
@@ -125,6 +127,7 @@ jobs:
               --handoff "$store" --key "$key" -- tar --zstd -cf - -C "$fixture" tree)
             python3 -c 'import json,sys; assert json.load(sys.stdin)["durable"] is True' <<<"$publication"
             cmp "$fixture/tier2-tree.tar.zst" "$store/$key/tier2-tree.tar.zst"
+            test ! -e "$handoff/$key"
 
             fallback=$(python3 /usr/local/libexec/soldrix-handoff.py \
               --archive "$fixture/upload-fallback.tar.zst" --packages "${sample%/*}/runtime-packages.txt" \
@@ -144,7 +147,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          cd "/var/cache/obs-runner/handoff/.soldrix-canary/$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          cd "$SOLDRIX_DURABLE_HANDOFF/$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
           test "$(stat -f -c %T .)" = btrfs
           sha256sum --strict -c SHA256SUMS
           tar --zstd -tf tier2-tree.tar.zst > "$RUNNER_TEMP/soldrix-handoff-files"
