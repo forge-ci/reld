@@ -8,6 +8,10 @@ on:
         required: true
         type: choice
         options: [go, rust, rust-fresh]
+      verify_ram_cache:
+        description: Verify the fresh Rust compiler cache is on tmpfs and reusable
+        default: false
+        type: boolean
 
 permissions: {}
 
@@ -25,6 +29,7 @@ jobs:
         shell: bash
         env:
           PROFILE: ${{ inputs.profile }}
+          VERIFY_RAM_CACHE: ${{ inputs.verify_ram_cache }}
         run: |
           set -euo pipefail
           test -d "$SOLDRIX_WORKSPACE"
@@ -53,6 +58,13 @@ jobs:
               unset SOLDR_RUSTC_WRAPPER SOLDR_BROKER_AUTOSPAWN ZCCACHE_DISABLE
               export SOLDR_PATH_REMAP=off SOLDR_CACHE_DIR="$root/compiler-cache"
               export XDG_CONFIG_HOME="$root/config"
+              if [[ "$VERIFY_RAM_CACHE" == true ]]; then
+                test "$(stat -f -c %T /opt/forge/soldr)" = tmpfs
+                test "$(stat -f -c %T /var/cache/obs-runner)" = tmpfs
+                cache="/opt/forge/soldr/soldrix-ram-canary-$GITHUB_RUN_ID"
+                mkdir -m 0700 "$cache"
+                export SOLDR_CACHE_DIR="$cache/compiler-cache"
+              fi
               mkdir -p "$RUSTUP_HOME/toolchains" "$TMPDIR" "$XDG_CONFIG_HOME"
               ln -s "$PWD/.ci-toolchain" "$RUSTUP_HOME/toolchains/1.98.1-x86_64-unknown-linux-gnu"
               test ! -e "$CARGO_TARGET_DIR"
@@ -62,6 +74,15 @@ jobs:
               test -s "$CARGO_TARGET_DIR/debug/libsoldr_core.rlib"
               python3 -c 'import json,sys; assert any(row.get("reason")=="compiler-artifact" and row["target"]["name"]=="soldr_core" and not row["fresh"] for row in map(json.loads, (line for line in sys.stdin if line.startswith("{"))))' < "$root/build.jsonl"
               printf 'fresh_rust_build_s=%s\n' "$((SECONDS - started))"
+              if [[ "$VERIFY_RAM_CACHE" == true ]]; then
+                export CARGO_TARGET_DIR="$root/reused-target"
+                test ! -e "$CARGO_TARGET_DIR"
+                started=$SECONDS
+                soldr cargo build --locked --offline -p soldr-core --message-format=json > "$root/reuse.jsonl"
+                test -s "$CARGO_TARGET_DIR/debug/libsoldr_core.rlib"
+                printf '%s\n' "$GITHUB_RUN_ID" > "$cache/persisted-run"
+                printf 'reused_rust_build_s=%s\n' "$((SECONDS - started))"
+              fi
               ;;
             *) exit 2 ;;
           esac
