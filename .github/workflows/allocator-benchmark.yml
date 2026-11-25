@@ -7,7 +7,7 @@ on:
         description: Workload profile requested by the job
         required: true
         type: choice
-        options: [go, rust]
+        options: [go, rust, rust-fresh]
 
 permissions: {}
 
@@ -41,6 +41,27 @@ jobs:
               ;;
             rust)
               test -r "$SOLDRIX_WORKSPACE/.soldrix-build/project/target/debug/libsoldr_core.rlib"
+              ;;
+            rust-fresh)
+              fixture="$SOLDRIX_WORKSPACE/.soldrix-build"
+              cd "$fixture/project"
+              root="$(mktemp -d "$PWD/.queue-fresh.XXXXXXXX")"
+              export HOME="$root" PATH="$fixture/bin:$PATH"
+              export RUSTUP_HOME="$root/rustup" RUSTUP_TOOLCHAIN=1.98.1 RUSTUP_AUTO_INSTALL=0
+              export CARGO_HOME="$PWD/.ci-cargo" CARGO_TARGET_DIR="$root/target" TMPDIR="$root/tmp"
+              export SOLDR_LINKER=default SOLDR_NATIVE_CACHE=0 SOLDR_TARGET_AUTO_PRUNE_ENABLED=0
+              unset SOLDR_RUSTC_WRAPPER SOLDR_BROKER_AUTOSPAWN ZCCACHE_DISABLE
+              export SOLDR_PATH_REMAP=off SOLDR_CACHE_DIR="$root/compiler-cache"
+              export XDG_CONFIG_HOME="$root/config"
+              mkdir -p "$RUSTUP_HOME/toolchains" "$TMPDIR" "$XDG_CONFIG_HOME"
+              ln -s "$PWD/.ci-toolchain" "$RUSTUP_HOME/toolchains/1.98.1-x86_64-unknown-linux-gnu"
+              test ! -e "$CARGO_TARGET_DIR"
+              test ! -e "$SOLDR_CACHE_DIR"
+              started=$SECONDS
+              soldr cargo build --locked --offline -p soldr-core --message-format=json > "$root/build.jsonl"
+              test -s "$CARGO_TARGET_DIR/debug/libsoldr_core.rlib"
+              python3 -c 'import json,sys; assert any(row.get("reason")=="compiler-artifact" and row["target"]["name"]=="soldr_core" and not row["fresh"] for row in map(json.loads, (line for line in sys.stdin if line.startswith("{"))))' < "$root/build.jsonl"
+              printf 'fresh_rust_build_s=%s\n' "$((SECONDS - started))"
               ;;
             *) exit 2 ;;
           esac
