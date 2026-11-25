@@ -16,6 +16,10 @@ on:
         description: Verify asset restore and publication on the bounded tmpfs
         default: false
         type: boolean
+      verify_durable_handoff:
+        description: Pack a real tree and verify its durable handoff from a new runner
+        default: false
+        type: boolean
 
 permissions: {}
 
@@ -35,6 +39,7 @@ jobs:
           PROFILE: ${{ inputs.profile }}
           VERIFY_RAM_CACHE: ${{ inputs.verify_ram_cache }}
           VERIFY_RAM_ASSETS: ${{ inputs.verify_ram_assets }}
+          VERIFY_DURABLE_HANDOFF: ${{ inputs.verify_durable_handoff }}
         run: |
           set -euo pipefail
           test -d "$SOLDRIX_WORKSPACE"
@@ -106,3 +111,41 @@ jobs:
             *) exit 2 ;;
           esac
           printf 'workload=%s runner=%s\n' "$PROFILE" "$RUNNER_NAME"
+          if [[ "$VERIFY_DURABLE_HANDOFF" == true ]]; then
+            handoff=/var/cache/obs-runner/handoff
+            store="$handoff/.soldrix-canary"
+            sample=$(find "$handoff" -mindepth 2 -maxdepth 2 -type f -name tier2-tree.tar.zst -size +100M -print -quit)
+            test -n "$sample"
+            test -r "${sample%/*}/runtime-packages.txt"
+            fixture=$(mktemp -d "$SOLDRIX_WORKSPACE/.handoff-canary.XXXXXXXX")
+            tar --zstd -xf "$sample" -C "$fixture"
+            key="$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+            publication=$(python3 /usr/local/libexec/soldrix-handoff.py \
+              --archive "$fixture/tier2-tree.tar.zst" --packages "${sample%/*}/runtime-packages.txt" \
+              --handoff "$store" --key "$key" -- tar --zstd -cf - -C "$fixture" tree)
+            python3 -c 'import json,sys; assert json.load(sys.stdin)["durable"] is True' <<<"$publication"
+            cmp "$fixture/tier2-tree.tar.zst" "$store/$key/tier2-tree.tar.zst"
+
+            fallback=$(python3 /usr/local/libexec/soldrix-handoff.py \
+              --archive "$fixture/upload-fallback.tar.zst" --packages "${sample%/*}/runtime-packages.txt" \
+              --handoff "$fixture/unavailable" --key "$key" -- \
+              tar --zstd -cf - -C "${sample%/*}" runtime-packages.txt)
+            python3 -c 'import json,sys; assert json.load(sys.stdin)["durable"] is False' <<<"$fallback"
+            test "$(tar --zstd -tf "$fixture/upload-fallback.tar.zst")" = runtime-packages.txt
+          fi
+
+  durable-handoff-reader:
+    if: github.ref == 'refs/heads/test/soldrix-prefetch-wire' && inputs.verify_durable_handoff
+    needs: profile-smoke
+    runs-on: [self-hosted, dell-jw22zc3, forge-dispatch, soldrix-prefetch-go]
+    timeout-minutes: 3
+    steps:
+      - name: Verify the published files from a fresh session
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "/var/cache/obs-runner/handoff/.soldrix-canary/$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          test "$(stat -f -c %T .)" = btrfs
+          sha256sum --strict -c SHA256SUMS
+          tar --zstd -tf tier2-tree.tar.zst > "$RUNNER_TEMP/soldrix-handoff-files"
+          test -s "$RUNNER_TEMP/soldrix-handoff-files"
