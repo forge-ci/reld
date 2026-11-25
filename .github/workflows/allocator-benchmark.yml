@@ -32,8 +32,6 @@ jobs:
       - forge-dispatch
       - soldrix-prefetch-${{ inputs.profile }}
     timeout-minutes: 3
-    env:
-      SOLDRIX_PREFETCH_PROFILE: soldrix-prefetch-${{ inputs.profile }}
     steps:
       - name: Verify the selected workload fixture
         shell: bash
